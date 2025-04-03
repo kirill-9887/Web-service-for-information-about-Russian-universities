@@ -11,7 +11,7 @@ app = FastAPI()
 
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
-    """Регистрирует нового пользователя"""
+    """Регистрирует нового пользователя, сразу авторизуя его"""
     password = data.password
     password_hash = auth.hash_password(password)
     db_session = create_db_session()
@@ -24,8 +24,13 @@ def register_new_user(data: dm.UserRegData):
             password_hash=password_hash,
         )
         db_session.add(user)
+        db_session.flush()  # Заставить сгенерировать user.id
+        token = auth.generate_session_token()
+        token_hash = auth.hash_password(token)
+        session = dbt.Session(token_hash=token_hash, user_id=user.id)
+        db_session.add(session)
         db_session.commit()
-        return dm.RegResult(status_ok=True)
+        return dm.RegResult(status_ok=True, token=token)
     except sqlalchemy.exc.IntegrityError as e:
         print(f"Ошибка при регистрации пользователя: {e}")
         db_session.rollback()
@@ -38,7 +43,7 @@ def register_new_user(data: dm.UserRegData):
 
 @app.post("/login")
 def login(data: dm.LoginData):
-    """Авторизует пользователя"""
+    """Авторизует пользователя: генерирует токен и создает сессию"""
     username = data.username
     password = data.password
     if not username:
@@ -118,8 +123,9 @@ def change_password(data: dm.ChangePasswordData):
         user = db_session.query(dbt.User).filter_by(user_id=user_id).first()
         if not auth.verify_password(user.password_hash, data.password):
             return dm.ChangePasswordResult(status_ok=False, error="Invalid password")
-        user.password_hash = auth.hash_password(data.password)
+        user.password_hash = auth.hash_password(data.new_password)
         db_session.commit()
+        logout_all(dm.SessionToken(token=data.token))
         return dm.ChangePasswordResult(status_ok=True)
     except sqlalchemy.exc.IntegrityError as e:  # TODO: нужно ли?
         db_session.rollback()

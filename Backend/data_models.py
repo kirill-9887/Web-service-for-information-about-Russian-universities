@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 ADMIN_ACCESS = 1
@@ -8,11 +8,11 @@ READER_ACCESS = 3
 
 
 class UserRegData(BaseModel):
-    username: str
-    name: str
-    surname: str
-    patronymic: str
-    password: str
+    username: str = Field(min_length=1)
+    name: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
+    surname: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
+    patronymic: str = Field(pattern="^$|^[a-zA-Zа-яА-Я]+$")
+    password: str = Field(min_length=8, pattern="^[a-zA-Z0-9_\-!@#$%^&*()]+$")
 
 
 class RegResult(BaseModel):

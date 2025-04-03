@@ -29,20 +29,19 @@ def verify_password(password_hash, password) -> bool:
         return False
 
 
-def verify_token(token):
+def verify_token(token) -> str | None:
     """Возвращает id пользователя, если токен действителен, иначе None"""
     token_hash = hash_password(token)
     db_session = create_db_session()
     try:
-        session = db_session.query(dbt.Session).filter_by(token_hash=token_hash).first()
+        session = db_session.query(dbt.Session).filter(dbt.Session.token_hash == token_hash \
+                                                       & dbt.Session.is_active == 1).first()
         if not session:
             return None
         current_time = int(time.time())
         if current_time > session.expiration_time:
             session.is_active = 0
             db_session.commit()
-            return None
-        if not session.is_active:
             return None
         return session.user_id
     finally:
