@@ -62,3 +62,38 @@ class ChangeAccessData(BaseModel):
 class BaseResult(BaseModel):
     status_ok: bool
     error: Optional[str] = None
+
+
+class UniversityViewDetailed(BaseModel):
+    """Модель для отправки данных о вузе клиенту (подробно)"""
+    id: str | None
+    full_name: str | None
+    short_name: str | None
+    is_branch: int | None
+    post_address: str | None
+    phone: str | None
+    fax: str | None
+    email: str | None
+    web_site: str | None
+    ogrn: int | None
+    inn: int | None
+    kpp: int | None
+    head_post: str | None
+    head_name: str | None
+    form_name: str | None
+    kind_name: str | None
+    type_name: str | None
+    region_name: str | None
+    federal_district_name: str | None
+
+    head_edu_org: tuple[str, str] = None
+    branches: list[tuple[str, str]] = None
+
+class UniversityViewBriefly(BaseModel):
+    """Модель для отправки данных о вузе клиенту (кратко)"""
+    id: str | None
+    full_name: str | None
+    short_name: str | None
+    is_branch: int | None
+    kind_name: str | None
+    region_name: str | None
