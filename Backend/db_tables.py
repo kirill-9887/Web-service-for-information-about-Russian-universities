@@ -7,6 +7,7 @@ from sqlalchemy import event
 import uuid
 import datetime
 import pytz
+from sqlalchemy.orm import relationship
 
 import auth
 from database import Base, engine
@@ -63,7 +64,9 @@ class University(Base):
     type_name = Column(TEXT)
     region_name = Column(TEXT)
     federal_district_name = Column(TEXT)
-
+    head_edu_org = relationship("University", back_populates="branches", remote_side=[id])
+    branches = relationship("University", back_populates="head_edu_org")
+    eduprogs = relationship("EduProg", back_populates="university")
 
 class NotUnivException(Exception):
     def __str__(self):
@@ -71,7 +74,7 @@ class NotUnivException(Exception):
 
 
 @event.listens_for(University, 'before_insert')
-def before_insert_listener(target):
+def before_insert_listener(mapper, connection, target):
     """Проверяет, является ли учебная организация филиалом, а также высшего образования ли она"""
     if target.is_branch is None:
         target.is_branch = int("филиал" in str(target.full_name).lower())
@@ -94,6 +97,7 @@ class EduProg(Base):
     is_canceled = Column(TEXT)
     is_suspended = Column(TEXT)
     university_id = Column(String, ForeignKey("universities.id", ondelete="CASCADE"))
+    university = relationship("University", back_populates="eduprogs")
 
 
 create_tables()
