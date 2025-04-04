@@ -71,7 +71,7 @@ class NotUnivException(Exception):
 
 
 @event.listens_for(University, 'before_insert')
-def before_insert_listener(target):
+def before_insert_listener(mapper, connection, target):
     """Проверяет, является ли учебная организация филиалом, а также высшего образования ли она"""
     if target.is_branch is None:
         target.is_branch = int("филиал" in str(target.full_name).lower())
