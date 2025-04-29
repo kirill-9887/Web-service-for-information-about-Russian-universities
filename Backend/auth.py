@@ -1,6 +1,8 @@
 import time
 import secrets
 import argon2
+
+import data_models as dm
 from database import create_db_session
 import db_tables as dbt
 
@@ -29,20 +31,24 @@ def verify_password(password_hash, password) -> bool:
         return False
 
 
-def verify_token(token) -> str | None:
-    """Возвращает id пользователя, если токен действителен, иначе None"""
-    token_hash = hash_password(token)
+def verify_session(session_data: str) -> dm.SessionData | None:
+    """Возвращает объект User, если сессия действительна, иначе None"""
+    if not session_data:
+        return None
+    session_id, session_token = session_data.split("&")
     db_session = create_db_session()
     try:
-        session = db_session.query(dbt.Session).filter(dbt.Session.token_hash == token_hash \
-                                                       & dbt.Session.is_active == 1).first()
-        if not session:
+        session = db_session.query(dbt.Session).get(session_id)
+        if not session or session.is_active == 0:
+            return None
+        if not verify_password(session.token_hash, session_token):
             return None
         current_time = int(time.time())
         if current_time > session.expiration_time:
             session.is_active = 0
             db_session.commit()
             return None
-        return session.user_id
+        user = dbt.User.get_by_id(session.user_id)
+        return dm.SessionData(user=user, session_id=session_id, session_token=session_token)
     finally:
         db_session.close()

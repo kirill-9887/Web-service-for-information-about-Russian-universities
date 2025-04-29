@@ -32,13 +32,11 @@ class LoginData(BaseModel):
     password: str
 
 
-class SessionToken(BaseModel):
-    token: str
 
-
-class LogoutResult(BaseModel):
-    status_ok: bool = True
-    error: Optional[str] = None
+class SessionData(BaseModel):
+    user: Any
+    session_id: str
+    session_token: str
 
 
 class ChangePasswordData(BaseModel):
@@ -54,7 +52,6 @@ class ChangePasswordResult(BaseModel):
 
 
 class ChangeAccessData(BaseModel):
-    token: str
     username: str
     new_access_level: int
 
