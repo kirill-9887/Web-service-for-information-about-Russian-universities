@@ -6,7 +6,7 @@ import uvicorn
 import threading
 
 from sqlalchemy import and_, or_, desc
-from fastapi import FastAPI, HTTPException, Query, status, Cookie
+from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from mako.lookup import TemplateLookup
 from typing import Optional
@@ -284,6 +284,56 @@ def get_univ_data(id: str,
         return HTMLResponse(content=html_content)
     finally:
         db_session.close()
+
+
+@app.post("/{mode}/university", response_class=JSONResponse)
+def post_edit_university(mode: str,
+                         data: dm.University = Body(),
+                         session_data: Optional[str] = Cookie(None)):
+    """
+    Обновляет или добавляет данные о вузе в БД
+    В случае успеха создания новой записи возвращает ее id
+    """
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.EDITOR_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    try:
+        if mode == "new":
+            univ = dbt.University.add(data)
+            return JSONResponse({"detail": "Successfully", "id": univ.id})
+        elif mode == "edit":
+            dbt.University.update(data)
+            return JSONResponse({"detail": "Successfully"})
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+    except dbt.RecordNotFoundError:
+        raise HTTPException(status_code=404, detail="Вуз не найден")
+    except dbt.NotUnivException:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Название организации не указывает на принадлежность к высшему образованию")
+    except Exception as e:
+        print(f"Ошибка при попытке обработать вуз: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
+
+
+@app.post("/delete/university/{id}", response_class=JSONResponse)
+def post_delete_university(id: str,
+                           session_data: Optional[str] = Cookie(None)):
+    """Удаляет вуз с данным id из БД, а также удаляются связанные образовательные программы"""
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.EDITOR_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    try:
+        dbt.University.delete(id)
+        return JSONResponse({"detail": "Successfully"})
+    except dbt.RecordNotFoundError:
+        raise HTTPException(status_code=404, detail="Вуз не найден")
+    except Exception as e:
+        print(f"Ошибка при попытке удалить вуз: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
 
 
 @app.post("/register")
