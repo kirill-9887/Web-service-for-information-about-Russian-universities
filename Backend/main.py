@@ -223,6 +223,51 @@ def get_univ_list(session_data: Optional[str] = Cookie(None),
         db_session.close()
 
 
+@app.get("/universities/edit/{id}", response_class=HTMLResponse)
+def get_edit_university(id: str,
+                        branch_from: str = Query(default=""),
+                        session_data: Optional[str] = Cookie(None)):
+    """
+    Возвращает страницу для добавления нового вуза в БД (редактор с пустыми полями)
+    /universities/edit/1a2b3c - редактировать вуз с id=1a2b3c
+    /universities/edit/new - добавить головную организацию
+    /universities/edit/new?branch_from=1a2b3c - добавить филиал для головной организации с id=1a2b3c
+    """
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.EDITOR_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    univ = None
+    mode = "new"
+    if id != "new":
+        if branch_from:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        mode = "edit"
+        db_session = create_db_session()
+        try:
+            univ = db_session.query(dbt.University).filter_by(id=id).first()
+            if not univ:
+                raise HTTPException(status_code=404)
+        finally:
+            db_session.close()
+    head_edu_org_name = ""
+    if branch_from:
+        head_edu_org = dbt.University.get(branch_from)
+        if not head_edu_org:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Вуз с данным id не найден")
+        if head_edu_org.is_branch:
+            raise HTTPException(status_code=status.ИФ, detail="Нельзя добавить филиал от филиала")
+        head_edu_org_name = head_edu_org.full_name
+    template = lookup.get_template("Frontend/university_new.html")
+    html_content = template.render(univ=dm.base2model(univ, dm.University).model_dump() if univ else "null",
+                                   branch_from=branch_from,
+                                   head_edu_org_name=head_edu_org_name,
+                                   mode=mode,
+                                   auth_username=session_model.user.username)
+    return HTMLResponse(content=html_content)
+
+
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
     """Регистрирует нового пользователя, сразу авторизуя его"""
