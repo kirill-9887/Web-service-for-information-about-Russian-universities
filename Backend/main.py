@@ -336,6 +336,22 @@ def post_delete_university(id: str,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
 
 
+@app.get("/profile", response_class=HTMLResponse)
+def get_user_profile(session_data: Optional[str] = Cookie(None)):
+    """Возвращает страницу профиль пользователя"""
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    user = session_model.user
+    template = lookup.get_template("Frontend/profile.html")
+    html_content = template.render(name=user.name,
+                                   surname=user.surname,
+                                   patronymic=user.patronymic,
+                                   auth_username=user.username,
+                                   can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS)
+    return HTMLResponse(content=html_content)
+
+
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
     """Регистрирует нового пользователя, сразу авторизуя его"""
