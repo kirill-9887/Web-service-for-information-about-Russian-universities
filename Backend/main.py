@@ -190,6 +190,39 @@ def post_delete_eduprogram(id: str,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
 
 
+@app.get("/universities", response_class=HTMLResponse)
+def get_univ_list(session_data: Optional[str] = Cookie(None),
+                       page: int = Query(default=1, ge=1),
+                       page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
+                       region: str = "",
+                       search: str = "",
+                       sort: str = "short_name",
+                       reverse: int = 0):
+    """Возвращает страницу с таблицей вузов"""
+    session_model = auth.verify_session(session_data)
+    offset = (page - 1) * page_size
+    order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
+    db_session = create_db_session()
+    try:
+        univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
+                    dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
+        all_univs_count = univs_query.count()
+        univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
+        regions_list = [region.name for region in db_session.query(dbt.Region).order_by(dbt.Region.name).all()]
+        univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
+        template = lookup.get_template("Frontend/index.html")
+        html_content = template.render(regions=regions_list, regionFilter=region, univs_json=univs_json, sortColumn=sort, reverse=reverse,
+                                       currentPage=page, itemsPerPage=page_size, maxPage=max(1, ceil(all_univs_count / page_size)),
+                                       nameSearchFilter=search, auth_username=get_username_from_session_model(
+                session_model),
+                                       can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS if session_model else False)
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        print("ERROR:", e)
+    finally:
+        db_session.close()
+
+
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
     """Регистрирует нового пользователя, сразу авторизуя его"""
