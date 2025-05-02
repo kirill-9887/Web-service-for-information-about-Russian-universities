@@ -8,11 +8,31 @@ import uuid
 import datetime
 import pytz
 from sqlalchemy.orm import relationship
-
+from typing import Type
 import auth
-from database import Base, engine
+from database import Base, engine, create_db_session
 import data_models as dm
 
+
+class RecordNotFoundError(Exception):
+    pass
+
+
+class UniqueConstraintFailedError(Exception):
+    pass
+
+
+class SelfCreatedIDError(Exception):
+    """
+    Означает, что произошла попытка вставить в таблицу запись с непустым полем id.
+    Используется, если база данных генерирует id автоматически.
+    """
+    pass
+
+
+def provide_uuid() -> str:
+    """Генерирует UUID"""
+    return str(uuid.uuid4())
 
 
 def create_tables():
@@ -27,6 +47,7 @@ def refresh_tip_tables():
 
 
 class User(Base):
+    """Таблица данных о зарегистрированных пользователях сервиса"""
     __tablename__ = "users"
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(TEXT, nullable=False, unique=True)
@@ -38,9 +59,92 @@ class User(Base):
     access_level = Column(Integer, default=dm.READER_ACCESS)
     sessions = relationship("Session", back_populates="user")
 
+    @classmethod
+    def get_by_id(cls, id: str) -> Type["User"] | None:
+        db_session = create_db_session()
+        try:
+            user = db_session.query(User).get(id)
+            return user
+        finally:
+            db_session.close()
+
+    @classmethod
+    def get_by_username(cls, username: str) -> Type["User"] | None:
+        db_session = create_db_session()
+        try:
+            user = db_session.query(User).filter_by(username=username).first()
+            return user
+        finally:
+            db_session.close()
+
+    @classmethod
+    def add(cls, data: dm.UserPersonalData, password_hash: str):
+        db_session = create_db_session()
+        try:
+            user = User(**data.model_dump(), password_hash=password_hash)
+            db_session.add(user)
+            db_session.commit()
+            return dm.base2model(user, dm.User)
+        except Exception as e:
+            db_session.rollback()
+            if "UNIQUE constraint failed: users.username" in str(e):
+                raise UniqueConstraintFailedError()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def update_personal_data(cls, id: str, personal_data: dm.UserPersonalData):
+        db_session = create_db_session()
+        try:
+            updated_row_count = db_session.query(User).filter_by(id=id).update({
+                User.username: personal_data.username,
+                User.name: personal_data.name,
+                User.surname: personal_data.surname,
+                User.patronymic: personal_data.patronymic,
+            })
+            if not updated_row_count:
+                raise RecordNotFoundError
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            if "UNIQUE constraint failed: users.username" in str(e):
+                raise UniqueConstraintFailedError()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def update_password_hash(cls, id: str, password_hash: str) -> None:
+        db_session = create_db_session()
+        try:
+            updated_row_count = db_session.query(User).filter_by(id=id).update({User.password_hash: password_hash})
+            if not updated_row_count:
+                raise RecordNotFoundError
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def update_access_level(cls, username: str, access_level: int) -> None:
+        db_session = create_db_session()
+        try:
+            updated_row_count = db_session.query(User).filter_by(username=username).update({User.access_level: access_level})
+            if not updated_row_count:
+                raise RecordNotFoundError
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
 
 
 class Session(Base):
+    """Таблица данных о сессиях авторизованных пользователей (текущих и завершенных)"""
     __tablename__ = "sessions"
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     token_hash = Column(TEXT)
@@ -49,9 +153,39 @@ class Session(Base):
     user_id = Column(TEXT, ForeignKey(column="users.id", ondelete="CASCADE"))
     user = relationship("User", back_populates="sessions")
 
+    @classmethod
+    def add(cls, token_hash: str, user_id: str) -> str:
+        db_session = create_db_session()
+        try:
+            session = Session(token_hash=token_hash, user_id=user_id)
+            db_session.add(session)
+            db_session.commit()
+            return session.id
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def end(cls, user_id: str, include_id: str = None, exclude_id: str = None):
+        db_session = create_db_session()
+        try:
+            updated_row_count = db_session.query(Session).filter(Session.user_id == user_id,
+                                                                 Session.id == include_id if include_id else True,
+                                                                 Session.id != exclude_id if exclude_id else True,
+                                                                 Session.is_active).update({Session.is_active: 0})
+            db_session.commit()
+            return updated_row_count
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
 
 
 class University(Base):
+    """Таблица данных об университетах из реестра"""
     __tablename__ = "universities"
     id = Column(String, primary_key=True)
     full_name = Column(TEXT)
@@ -78,6 +212,66 @@ class University(Base):
     eduprogs = relationship("EduProg", back_populates="university")
     name_search = Column(TEXT)
 
+    @classmethod
+    def get(cls, id: str) -> Type["University"] | None:
+        db_session = create_db_session()
+        try:
+            univ = db_session.query(University).get(id)
+            return univ
+        finally:
+            db_session.close()
+
+    @classmethod
+    def add(cls, data: dm.University, from_parser=False):
+        db_session = create_db_session()
+        try:
+            univ = University(**data.model_dump())
+            if univ.id and not from_parser:
+                raise SelfCreatedIDError
+            if not from_parser:
+                univ.id = provide_uuid()
+            db_session.add(univ)
+            db_session.commit()
+            return dm.base2model(univ, dm.University)
+        except Exception as e:
+            db_session.rollback()
+            if "UNIQUE" in str(e):
+                raise UniqueConstraintFailedError
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def update(cls, data: dm.University):
+        db_session = create_db_session()
+        try:
+            univ = db_session.query(University).get(data.id)
+            if not univ:
+                raise RecordNotFoundError
+            for column, value in data.model_dump().items():
+                setattr(univ, column, value)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def delete(cls, id: str):
+        db_session = create_db_session()
+        try:
+            univ = db_session.query(University).get(id)
+            if not univ:
+                raise RecordNotFoundError
+            db_session.delete(univ)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
 
 class NotUnivException(Exception):
     def __str__(self):
@@ -96,6 +290,7 @@ def university_before_listener(mapper, connection, target):
 
 
 class EduProg(Base):
+    """Таблица данных об образовательных программах из реестра"""
     __tablename__ = "educational_programs"
     id = Column(String, primary_key=True)
     type_name = Column(TEXT)
@@ -111,6 +306,57 @@ class EduProg(Base):
     is_suspended = Column(Integer)
     university_id = Column(String, ForeignKey("universities.id", ondelete="CASCADE"))
     university = relationship("University", back_populates="eduprogs")
+
+    @classmethod
+    def add(cls, data: dm.EduProg, from_parser=False):
+        db_session = create_db_session()
+        try:
+            eduprog = EduProg(**data.model_dump())
+            if eduprog.id and not from_parser:
+                raise SelfCreatedIDError
+            if not from_parser:
+                eduprog.id = provide_uuid()
+            db_session.add(eduprog)
+            db_session.commit()
+            return dm.base2model(eduprog, dm.EduProg)
+        except Exception as e:
+            db_session.rollback()
+            if "UNIQUE" in str(e):
+                raise UniqueConstraintFailedError
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def update(cls, data: dm.EduProg):
+        db_session = create_db_session()
+        try:
+            eduprog = db_session.query(EduProg).get(data.id)
+            if not eduprog:
+                raise RecordNotFoundError
+            for column, value in data.model_dump().items():
+                setattr(eduprog, column, value)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def delete(cls, id: str):
+        db_session = create_db_session()
+        try:
+            eduprog = db_session.query(EduProg).get(id)
+            if not eduprog:
+                raise RecordNotFoundError
+            db_session.delete(eduprog)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
 
 
 create_tables()
