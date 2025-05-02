@@ -1,8 +1,11 @@
+import json
+from math import ceil
+
 import sqlalchemy
 import uvicorn
 import threading
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, desc
 from fastapi import FastAPI, HTTPException, Query, status, Cookie
 from fastapi.responses import HTMLResponse, FileResponse
 from mako.lookup import TemplateLookup
@@ -35,6 +38,48 @@ def get_home(session_data: Optional[str] = Cookie(None)):
     template = lookup.get_template("Frontend/home.html")
     html_content = template.render(auth_username=get_username_from_session_model(session_model))
     return HTMLResponse(content=html_content)
+
+
+@app.get("/eduprograms", response_class=HTMLResponse)
+def get_eduprograms(session_data: Optional[str] = Cookie(None),
+                    page: int = Query(default=1, ge=1),
+                    page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
+                    ugs: str = Query(default=""),
+                    prog_code: str = Query(default=""),
+                    sort: str = Query(default="programm_code"),
+                    reverse: int = Query(default=0),
+                    univ_id: str = Query(default="")):
+    """Возвращает страницу с таблицей образовательных программ"""
+    session_model = auth.verify_session(session_data)
+    offset = (page - 1) * page_size
+    if sort == "university.full_name":
+        order = dbt.University.full_name if not reverse else desc(dbt.University.full_name)
+    else:
+        order = getattr(dbt.EduProg, sort) if not reverse else getattr(dbt.EduProg, sort).desc()
+    db_session = create_db_session()
+    try:
+        eduprogs_query = db_session.query(dbt.EduProg).filter(dbt.EduProg.ugs_code == ugs if ugs else True,
+            dbt.EduProg.programm_code == prog_code if prog_code else True,
+            dbt.EduProg.university_id == univ_id if univ_id else True)
+        all_eduprogs_count = eduprogs_query.count()
+        eduprogs = eduprogs_query.order_by(order, dbt.EduProg.programm_code).offset(offset).limit(page_size).all()
+        eduprogs_json = json.dumps([dm.base2model(eduprog, dm.EduProgForView, university_full_name=eduprog.university.full_name).model_dump() for eduprog in eduprogs])
+        ugs_list = [ugs.code for ugs in db_session.query(dbt.Ugs).order_by(dbt.Ugs.code).all()]  # TODO: кеширование
+        prog_code_list = [prog_code.code for prog_code in db_session.query(dbt.ProgCode).order_by(dbt.ProgCode.code).all()]  # TODO: кеширование
+        template = lookup.get_template("Frontend/eduprograms.html")
+        html_content = template.render(ugsList=ugs_list, ugsFilter=ugs, progCodeList=prog_code_list,
+                                       progCodeFilter=prog_code, eduprogs_json=eduprogs_json, univ_id=univ_id,
+                                       sortColumn=sort, reverse=reverse,
+                                       currentPage=page, itemsPerPage=page_size,
+                                       maxPage=max(1, ceil(all_eduprogs_count / page_size)),
+                                       auth_username=get_username_from_session_model(session_model),
+                                       can_edit=session_model and session_model.user.access_level >= dm.EDITOR_ACCESS)
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        print("ERROR:", e)
+        raise e
+    finally:
+        db_session.close()
 
 
 @app.post("/register")
