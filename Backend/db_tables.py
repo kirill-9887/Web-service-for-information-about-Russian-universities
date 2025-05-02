@@ -1,11 +1,10 @@
-import time
-
-from sqlalchemy import ForeignKey, DateTime
+from sqlalchemy import ForeignKey
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.dialects.sqlite import TEXT
 from sqlalchemy import event
 import uuid
 import datetime
+import time
 import pytz
 from sqlalchemy.orm import relationship
 from typing import Type
