@@ -1,14 +1,20 @@
 import time
 import secrets
 import argon2
-
-import data_models as dm
+import pydantic
+from typing import Any
 from database import create_db_session
 import db_tables as dbt
 
 
 TOKEN_LENGTH = 32  # в байтах
 TOKEN_TIME = 24 * 60 * 60
+
+
+class SessionData(pydantic.BaseModel):
+    user: Any
+    session_id: str
+    session_token: str
 
 
 def generate_session_token(length=TOKEN_LENGTH):
@@ -31,7 +37,7 @@ def verify_password(password_hash, password) -> bool:
         return False
 
 
-def verify_session(session_data: str) -> dm.SessionData | None:
+def verify_session(session_data: str) -> SessionData | None:
     """Возвращает объект User, если сессия действительна, иначе None"""
     if not session_data:
         return None
@@ -49,6 +55,6 @@ def verify_session(session_data: str) -> dm.SessionData | None:
             db_session.commit()
             return None
         user = dbt.User.get_by_id(session.user_id)
-        return dm.SessionData(user=user, session_id=session_id, session_token=session_token)
+        return SessionData(user=user, session_id=session_id, session_token=session_token)
     finally:
         db_session.close()
