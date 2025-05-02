@@ -415,28 +415,15 @@ def logout(session_data: Optional[str] = Cookie(None)):
     dbt.Session.end(session_model.user.id, include_id=session_model.session_id)
 
 
-
-@app.post("/logout/all")
-def logout_all(data: dm.SessionToken):
+@app.post("/logout/all", response_class=JSONResponse)
+def logout_all(session_data: Optional[str] = Cookie(None)):
     """Завершить все сессии, кроме текущей"""
-    token = data.token
-    user_id = auth.verify_token(token)
-    if not user_id:
-        return dm.LogoutResult(status_ok=False, error="Invalid token")
-    db_session = create_db_session()
-    try:
-        active_sessions = db_session.query(dbt.Session).filter(and_(dbt.Session.user_id == user_id,
-                                                                dbt.Session.token_hash != auth.hash_password(token)))
-        for session in active_sessions:
-            session.is_active = 0
-        db_session.commit()  # TODO: нужен ли отступ?
-        return dm.LogoutResult()
-    except sqlalchemy.exc.IntegrityError as e:  # TODO: нужно ли?
-        db_session.rollback()
-        print(f"Ошибка при попытке выйти из всех устройств: {e}")
-        return dm.LoginResult(status_ok=False, error="Unknown error")
-    finally:
-        db_session.close()
+    if not session_data:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы уже не авторизованы")
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный токен. Скорее всего ваша сессия истекла")
+    dbt.Session.end(session_model.user.id, exclude_id=session_model.session_id)
 
 
 @app.post("/changepassword")
