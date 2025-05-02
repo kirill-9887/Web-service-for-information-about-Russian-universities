@@ -1,6 +1,8 @@
 import sqlalchemy
 from sqlalchemy import and_, or_
 from fastapi import FastAPI, HTTPException, Query
+import uvicorn
+import threading
 from mako.lookup import TemplateLookup
 
 import auth
@@ -210,3 +212,11 @@ def get_univ_data(id: str):
         return eduorg_model
     finally:
         db_session.close()
+
+if __name__ == "__main__":
+    dbt.create_tables()
+    import webbrowser
+    host="0.0.0.0"
+    port=8000
+    threading.Timer(2, lambda: webbrowser.open(f"http://{host}:{port}")).start()
+    uvicorn.run(app, host=host, port=port)
