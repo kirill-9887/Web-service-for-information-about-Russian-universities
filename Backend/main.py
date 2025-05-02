@@ -1,23 +1,18 @@
 import json
-from math import ceil
-
-import sqlalchemy
 import uvicorn
 import threading
-
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import desc
 from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from mako.lookup import TemplateLookup
 from typing import Optional
-
 import auth
 import db_tables as dbt
 import data_models as dm
 from database import create_db_session
-
 import os
 import config
+from math import ceil
 
 app = FastAPI()
 lookup = TemplateLookup(directories=[os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
@@ -483,6 +478,29 @@ def set_rights(data: dm.ChangeAccessData = Body(),
         print("ERROR:", e)
         raise e
 
+
+@app.get("/users", response_class=HTMLResponse)
+def get_users_data(session_data: Optional[str] = Cookie(None),
+                   page: int = Query(default=1, ge=1),
+                   page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1)):
+    """Возвращает страницу с таблицей данных о зарегистрированных пользователях"""
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.ADMIN_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    offset = (page - 1) * page_size
+    with create_db_session() as db_session:
+        users_query = db_session.query(dbt.User)
+        all_users_count = users_query.count()
+        users = users_query.offset(offset).limit(page_size).all()
+        users_json = json.dumps([dm.base2model(user, dm.User).model_dump() for user in users])
+    template = lookup.get_template("Frontend/users_redactor.html")
+    html_content = template.render(users_json=users_json,
+                                   currentPage=page, itemsPerPage=page_size,
+                                   maxPage=max(1, ceil(all_users_count / page_size)),
+                                   auth_username=get_username_from_session_model(session_model))
+    return HTMLResponse(content=html_content)
 
 # Служебные
 
