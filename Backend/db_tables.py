@@ -23,19 +23,19 @@ def create_tables():
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()), unique=True)
+    id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(TEXT, nullable=False, unique=True)
     name = Column(TEXT, nullable=False)
     surname = Column(TEXT, nullable=False)
     patronymic = Column(TEXT)  # TODO: no patronymic?
-    registrate_date = Column(DateTime, default=lambda: datetime.datetime.now(pytz.timezone('Europe/Moscow')))
+    registrate_date = Column(TEXT, default=lambda: str(datetime.datetime.now(pytz.timezone('Europe/Moscow'))))
     password_hash = Column(TEXT, nullable=False)
     access_level = Column(Integer, default=dm.READER_ACCESS)
 
 
 class Session(Base):
     __tablename__ = "sessions"
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     token_hash = Column(TEXT)
     expiration_time = Column(Integer, default=lambda: int(time.time()) + auth.TOKEN_TIME)
     is_active = Column(Integer, default=1)
@@ -47,16 +47,16 @@ class University(Base):
     id = Column(String, primary_key=True)
     full_name = Column(TEXT)
     short_name = Column(TEXT)
-    head_edu_org_id = Column(String, ForeignKey(column="universities.id", ondelete="CASCADE"))
+    head_edu_org_id = Column(String, ForeignKey(column="universities.id", ondelete="CASCADE"), default=None)
     is_branch = Column(Integer)
     post_address = Column(TEXT)
     phone = Column(TEXT)
     fax = Column(TEXT)
     email = Column(TEXT)
     web_site = Column(TEXT)
-    ogrn = Column(Integer)
-    inn = Column(Integer)
-    kpp = Column(Integer)
+    ogrn = Column(TEXT)
+    inn = Column(TEXT)
+    kpp = Column(TEXT)
     head_post = Column(TEXT)
     head_name = Column(TEXT)
     form_name = Column(TEXT)
@@ -93,9 +93,9 @@ class EduProg(Base):
     ugs_code = Column(TEXT)
     edu_normative_period = Column(TEXT)
     qualification = Column(TEXT)
-    is_accredited = Column(TEXT)
-    is_canceled = Column(TEXT)
-    is_suspended = Column(TEXT)
+    is_accredited = Column(Integer)
+    is_canceled = Column(Integer)
+    is_suspended = Column(Integer)
     university_id = Column(String, ForeignKey("universities.id", ondelete="CASCADE"))
     university = relationship("University", back_populates="eduprogs")
 
