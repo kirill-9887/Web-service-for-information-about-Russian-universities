@@ -19,6 +19,13 @@ import data_models as dm
 def create_tables():
     Base.metadata.create_all(engine)
     print("Таблицы созданы")
+    refresh_tip_tables()
+
+
+def refresh_tip_tables():
+    Region.refresh()
+    Ugs.refresh()
+    ProgCode.refresh()
 
 
 class User(Base):
@@ -101,3 +108,64 @@ class EduProg(Base):
 
 
 create_tables()
+class Region(Base):
+    """Таблица, которая содержит список регионов (для поля фильтрации)"""
+    __tablename__ = "regions"
+    name = Column(TEXT, primary_key=True)
+
+    @classmethod
+    def refresh(cls):
+        """Формирует список регионов, встречающихся в таблице вузов"""
+        db_session = create_db_session()
+        try:
+            regions = db_session.query(University.region_name).group_by(University.region_name)
+            db_session.query(Region).delete()
+            db_session.add_all(Region(name=region[0]) for region in regions)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+
+class Ugs(Base):
+    """Таблица, которая содержит список кодов укрупненных групп специальностей (для поля фильтрации)"""
+    __tablename__ = "ugs"
+    code = Column(TEXT, primary_key=True)
+
+    @classmethod
+    def refresh(cls):
+        """Формирует список кодов укрупненных групп специальностей, встречающихся в таблице образовательных программ"""
+        db_session = create_db_session()
+        try:
+            ugs_codes = db_session.query(EduProg.ugs_code).group_by(EduProg.ugs_code)
+            db_session.query(Ugs).delete()
+            db_session.add_all(Ugs(code=ugs_code[0]) for ugs_code in ugs_codes)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+
+class ProgCode(Base):
+    """Таблица, которая содержит список кодов специальностей (для поля фильтрации)"""
+    __tablename__ = "prog_codes"
+    code = Column(TEXT, primary_key=True)
+
+    @classmethod
+    def refresh(cls):
+        """Формирует список кодов специальностей, встречающихся в таблице образовательных программ"""
+        db_session = create_db_session()
+        try:
+            prog_codes = db_session.query(EduProg.programm_code).group_by(EduProg.programm_code)
+            db_session.query(ProgCode).delete()
+            db_session.add_all(ProgCode(code=prog_code[0]) for prog_code in prog_codes)
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
