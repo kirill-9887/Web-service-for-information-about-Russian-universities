@@ -82,6 +82,35 @@ def get_eduprograms(session_data: Optional[str] = Cookie(None),
         db_session.close()
 
 
+@app.get("/eduprograms/edit/{id}", response_class=HTMLResponse)
+def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
+                        id: str = None):
+    """Возвращает страницу для редактирования образовательной программы под данным id в БД"""
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.EDITOR_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    db_session = create_db_session()
+    try:
+        eduprog = db_session.query(dbt.EduProg).get(id)
+        university = db_session.query(dbt.University).get(eduprog.university_id)
+    except Exception as e:
+        print("ERROR:", e)
+        raise e
+    finally:
+        db_session.close()
+    if not eduprog:
+        raise HTTPException(status_code=404)
+    template = lookup.get_template("Frontend/eduprog_edit.html")
+    html_content = template.render(eduprog=dm.base2model(eduprog, dm.EduProg).model_dump(),
+                                   university_id=university.id,
+                                   university_full_name=university.full_name,
+                                   mode="edit",
+                                   auth_username=session_model.user.username)
+    return HTMLResponse(content=html_content)
+
+
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
     """Регистрирует нового пользователя, сразу авторизуя его"""
