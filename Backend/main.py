@@ -257,7 +257,7 @@ def get_edit_university(id: str,
         if not head_edu_org:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Вуз с данным id не найден")
         if head_edu_org.is_branch:
-            raise HTTPException(status_code=status.ИФ, detail="Нельзя добавить филиал от филиала")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя добавить филиал от филиала")
         head_edu_org_name = head_edu_org.full_name
     template = lookup.get_template("Frontend/university_new.html")
     html_content = template.render(univ=dm.base2model(univ, dm.University).model_dump() if univ else "null",
