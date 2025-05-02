@@ -1,5 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field
+import database
+from typing import Type
 
 
 ADMIN_ACCESS = 1
@@ -8,6 +10,16 @@ READER_ACCESS = 3
 
 
 class UserRegData(BaseModel):
+def base2model(base: Type[database.Base], model_class: Type[BaseModel], **kwargs):
+    """
+    Конвертирует объект класса sqlalchemy записи таблицы базы данных в pydantic-модель
+    base: объект записи из базы данных
+    model_class: pydantic-модель, с помощью которой будут представлены данные
+    """
+    dictionary = {column.name: getattr(base, column.name) for column in base.__table__.columns}
+    dictionary.update(kwargs)
+    return model_class.model_validate(dictionary)
+
     username: str = Field(min_length=1)
     name: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
     surname: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
