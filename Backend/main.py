@@ -388,50 +388,32 @@ def register_new_user(data: dm.UserRegData = Body()):
     return generate_session_token_response(session_id, session_token)
 
 
-@app.post("/login")
-def login(data: dm.LoginData):
+@app.post("/login", response_class=JSONResponse)
+def login(data: dm.LoginData = Body()):
     """Авторизует пользователя: генерирует токен и создает сессию"""
-    username = data.username
-    password = data.password
-    if not username:
-        return dm.LoginResult(status_ok=False, error="Username missed")
-    if not password:
-        return dm.LoginResult(status_ok=False, error="Password missed")
-    db_session = create_db_session()
+    username, password = data.username, data.password
+    user = dbt.User.get_by_username(username=username)
+    if not user or not auth.verify_password(user.password_hash, password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверное имя пользователя или пароль")
+    session_token = auth.generate_session_token()
     try:
-        user = db_session.query(dbt.User).filter_by(username=username).first()
-        if not user:
-            return dm.LoginResult(status_ok=False, error="Invalid username")
-        if not auth.verify_password(user.password_hash, password):
-            return dm.LoginResult(status_ok=False, error="Invalid password")
-        token = auth.generate_session_token()
-        token_hash = auth.hash_password(token)
-        session = dbt.Session(token_hash=token_hash, user_id=user.id)
-        db_session.add(session)
-        db_session.commit()
-        return dm.LoginResult(status_ok=True, token=token)
+        session_id = dbt.Session.add(token_hash=auth.hash_password(session_token), user_id=user.id)
     except Exception as e:
-        print(f"Ошибка при авторизации: {e}")
-        return dm.LoginResult(status_ok=False, error="error2")
-    finally:
-        db_session.close()
-        print("Сессия закрыта")
+        print("ERROR:", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Авторизация не удалась из-за внутренней ошибки сервера")
+    return generate_session_token_response(session_id, session_token)
 
 
-@app.post("/logout")
-def logout(data: dm.SessionToken):
+@app.post("/logout", response_class=JSONResponse)
+def logout(session_data: Optional[str] = Cookie(None)):
     """Завершает текущую сессию"""
-    token = data.token
-    if not auth.verify_token(token):
-        return dm.LogoutResult()
-    db_session = create_db_session()
-    try:
-        session = db_session.query(dbt.Session).filter_by(token_hash=auth.hash_password(token)).first()
-        session.is_active = 0
-        db_session.commit()
-        return dm.LogoutResult()
-    finally:
-        db_session.close()
+    if not session_data:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        return
+    dbt.Session.end(session_model.user.id, include_id=session_model.session_id)
+
 
 
 @app.post("/logout/all")
