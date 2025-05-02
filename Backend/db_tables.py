@@ -13,7 +13,6 @@ import auth
 from database import Base, engine
 import data_models as dm
 
-# TODO: связи/зависимости между таблицами в классах
 
 
 def create_tables():
@@ -37,6 +36,8 @@ class User(Base):
     registrate_date = Column(TEXT, default=lambda: str(datetime.datetime.now(pytz.timezone('Europe/Moscow'))))
     password_hash = Column(TEXT, nullable=False)
     access_level = Column(Integer, default=dm.READER_ACCESS)
+    sessions = relationship("Session", back_populates="user")
+
 
 
 class Session(Base):
@@ -46,6 +47,8 @@ class Session(Base):
     expiration_time = Column(Integer, default=lambda: int(time.time()) + auth.TOKEN_TIME)
     is_active = Column(Integer, default=1)
     user_id = Column(TEXT, ForeignKey(column="users.id", ondelete="CASCADE"))
+    user = relationship("User", back_populates="sessions")
+
 
 
 class University(Base):
