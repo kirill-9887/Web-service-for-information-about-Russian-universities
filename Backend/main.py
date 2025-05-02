@@ -190,37 +190,7 @@ def post_delete_eduprogram(id: str,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
 
 
-@app.get("/universities", response_class=HTMLResponse)
-def get_univ_list(session_data: Optional[str] = Cookie(None),
-                       page: int = Query(default=1, ge=1),
-                       page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
-                       region: str = "",
-                       search: str = "",
-                       sort: str = "short_name",
-                       reverse: int = 0):
-    """Возвращает страницу с таблицей вузов"""
-    session_model = auth.verify_session(session_data)
-    offset = (page - 1) * page_size
-    order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
-    db_session = create_db_session()
-    try:
-        univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
-                    dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
-        all_univs_count = univs_query.count()
-        univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
-        regions_list = [region.name for region in db_session.query(dbt.Region).order_by(dbt.Region.name).all()]
-        univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
-        template = lookup.get_template("Frontend/index.html")
-        html_content = template.render(regions=regions_list, regionFilter=region, univs_json=univs_json, sortColumn=sort, reverse=reverse,
-                                       currentPage=page, itemsPerPage=page_size, maxPage=max(1, ceil(all_univs_count / page_size)),
-                                       nameSearchFilter=search, auth_username=get_username_from_session_model(
-                session_model),
-                                       can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS if session_model else False)
-        return HTMLResponse(content=html_content)
-    except Exception as e:
-        print("ERROR:", e)
-    finally:
-        db_session.close()
+
 
 
 @app.get("/universities/edit/{id}", response_class=HTMLResponse)
@@ -268,22 +238,7 @@ def get_edit_university(id: str,
     return HTMLResponse(content=html_content)
 
 
-@app.get("/universities/{id}", response_class=HTMLResponse)
-def get_univ_data(id: str,
-                  session_data: Optional[str] = Cookie(None)):
-    """Возвращает страницу с данными о вузе по его id в базе данных"""
-    session_model = auth.verify_session(session_data)
-    db_session = create_db_session()
-    try:
-        univ = db_session.query(dbt.University).filter_by(id=id).first()
-        if not univ:
-            raise HTTPException(status_code=404, detail="University not found")
-        template = lookup.get_template("Frontend/university.html")
-        html_content = template.render(univ=univ, auth_username=get_username_from_session_model(session_model),
-                                       can_edit=session_model and session_model.user.access_level >= dm.EDITOR_ACCESS)
-        return HTMLResponse(content=html_content)
-    finally:
-        db_session.close()
+
 
 
 @app.post("/{mode}/university", response_class=JSONResponse)
@@ -470,55 +425,53 @@ def add_admin_rights(data: dm.ChangeAccessData):
         db_session.close()
 
 
-@app.get("/opendata/universities")
-def get_univ_list_data(page: int = Query(ge=1),
-                       page_size: int = Query(default=20, ge=1),
-                       region: str = None,
-                       name: str = None,
-                       sort: list[str] = Query(default=None)):
-    """Возвращает данные о вузах, отфильтрованные или отсортированные по региону или по названию"""
+@app.get("/universities", response_class=HTMLResponse)
+def get_univ_list(session_data: Optional[str] = Cookie(None),
+                       page: int = Query(default=1, ge=1),
+                       page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
+                       region: str = "",
+                       search: str = "",
+                       sort: str = "short_name",
+                       reverse: int = 0):
+    """Возвращает страницу с таблицей вузов"""
+    session_model = auth.verify_session(session_data)
     offset = (page - 1) * page_size
-    if not sort:
-        order = [dbt.University.short_name]
-    else:
-        order = list()
-        for i in range(0, len(sort), 2):
-            if sort[i] == "name":
-                order.append(dbt.University.short_name if sort[i + 1] == "asc" else dbt.University.short_name.desc())
-            elif sort[i] == "region":
-                order.append(dbt.University.region_name if sort[i + 1] == "asc" else dbt.University.region_name.desc())
-            else:
-                raise HTTPException(status_code=400)
+    order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
     db_session = create_db_session()
     try:
-        univs = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
-                                                        or_(dbt.University.full_name.like(f"%{name}%"),
-                                                            dbt.University.short_name.like(f"%{name}%"))
-                                                        if name else True).order_by(*order).offset(offset).limit(page_size).all()
-        if not univs:
-            return univs
-        univ_dicts = [{column.name: getattr(univ, column.name) for column in univ.__table__.columns} for univ in univs]
-        univ_model = [dm.UniversityViewBriefly.model_validate(univ_dict) for univ_dict in univ_dicts]
-        return univ_model
+        univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
+                    dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
+        all_univs_count = univs_query.count()
+        univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
+        regions_list = [region.name for region in db_session.query(dbt.Region).order_by(dbt.Region.name).all()]
+        univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
+        template = lookup.get_template("Frontend/index.html")
+        html_content = template.render(regions=regions_list, regionFilter=region, univs_json=univs_json, sortColumn=sort, reverse=reverse,
+                                       currentPage=page, itemsPerPage=page_size, maxPage=max(1, ceil(all_univs_count / page_size)),
+                                       nameSearchFilter=search, auth_username=get_username_from_session_model(
+                session_model),
+                                       can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS if session_model else False)
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        print("ERROR:", e)
     finally:
         db_session.close()
 
 
-@app.get("/opendata/universities/{id}")
-def get_univ_data(id: str):
-    """Возвращает данные о вузе по его id в базе данных"""
+@app.get("/universities/{id}", response_class=HTMLResponse)
+def get_univ_data(id: str,
+                  session_data: Optional[str] = Cookie(None)):
+    """Возвращает страницу с данными о вузе по его id в базе данных"""
+    session_model = auth.verify_session(session_data)
     db_session = create_db_session()
     try:
-        eduorg = db_session.query(dbt.University).filter_by(id=id).first()
-        if not eduorg:
+        univ = db_session.query(dbt.University).filter_by(id=id).first()
+        if not univ:
             raise HTTPException(status_code=404, detail="University not found")
-        eduorg_dict = {column.name: getattr(eduorg, column.name) for column in eduorg.__table__.columns}
-        eduorg_model = dm.UniversityViewDetailed.model_validate(eduorg_dict)
-        if eduorg.head_edu_org:
-            eduorg_model.head_edu_org = (eduorg.head_edu_org.id, eduorg.head_edu_org.full_name)
-        if eduorg.branches:
-            eduorg_model.branches = [(branch.id, branch.short_name) for branch in eduorg.branches]
-        return eduorg_model
+        template = lookup.get_template("Frontend/university.html")
+        html_content = template.render(univ=univ, auth_username=get_username_from_session_model(session_model),
+                                       can_edit=session_model and session_model.user.access_level >= dm.EDITOR_ACCESS)
+        return HTMLResponse(content=html_content)
     finally:
         db_session.close()
 
