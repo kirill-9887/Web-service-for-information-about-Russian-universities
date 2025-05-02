@@ -4,7 +4,6 @@ import sqlite3
 import config
 
 
-engine = create_engine(config.DATABASE_URL, echo=True)
 @sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
     if config.DISABLE_FOREIGN_KEY_CONSTRAINT:
@@ -15,6 +14,7 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
         cursor.close()
 
 
+engine = sqlalchemy.create_engine(config.DATABASE_URL, echo=config.DB_ECHO)
 Base = declarative_base()
 DBSession = sessionmaker(bind=engine)
 
