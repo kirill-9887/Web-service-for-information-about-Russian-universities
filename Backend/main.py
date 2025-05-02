@@ -352,36 +352,40 @@ def get_user_profile(session_data: Optional[str] = Cookie(None)):
     return HTMLResponse(content=html_content)
 
 
-@app.post("/register")
-def register_new_user(data: dm.UserRegData):
+def generate_session_token_response(session_id, session_token):
+    response = JSONResponse({"msg": "Successful"})
+    response.set_cookie(
+        key="session_data",
+        value=f"{session_id}&{session_token}",
+        httponly=True,
+        # secure=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/register", response_class=JSONResponse)
+def register_new_user(data: dm.UserRegData = Body()):
     """Регистрирует нового пользователя, сразу авторизуя его"""
     password = data.password
     password_hash = auth.hash_password(password)
-    db_session = create_db_session()
     try:
-        user = dbt.User(
+        user = dbt.User.add(dm.UserPersonalData(
             username=data.username,
             name=data.name,
             surname=data.surname,
-            patronymic=data.patronymic,
-            password_hash=password_hash,
+            patronymic=data.patronymic),
+            password_hash=password_hash
         )
-        db_session.add(user)
-        db_session.flush()  # Заставить сгенерировать user.id
-        token = auth.generate_session_token()
-        token_hash = auth.hash_password(token)
-        session = dbt.Session(token_hash=token_hash, user_id=user.id)
-        db_session.add(session)
-        db_session.commit()
-        return dm.RegResult(status_ok=True, token=token)
-    except sqlalchemy.exc.IntegrityError as e:
-        print(f"Ошибка при регистрации пользователя: {e}")
-        db_session.rollback()
-        if "UNIQUE constraint failed: users.username" in str(e):
-            return dm.RegResult(status_ok=False, error="The username is already in use")
-        return dm.RegResult(status_ok=False, error="Registration error")
-    finally:
-        db_session.close()
+    except dbt.UniqueConstraintFailedError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Имя пользователя уже занято")
+    session_token = auth.generate_session_token()
+    try:
+        session_id = dbt.Session.add(token_hash=auth.hash_password(session_token), user_id=user.id)
+    except Exception as e:
+        print("ERROR:", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Вы зарегистрированы. Авторизация не удалась из-за внутренней ошибки сервера")
+    return generate_session_token_response(session_id, session_token)
 
 
 @app.post("/login")
