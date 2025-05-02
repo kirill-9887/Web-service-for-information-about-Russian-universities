@@ -1,11 +1,12 @@
 import sqlalchemy
-from sqlalchemy import and_, or_
-from fastapi import FastAPI, HTTPException, Query
 import uvicorn
 import threading
-from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+
+from sqlalchemy import and_, or_
+from fastapi import FastAPI, HTTPException, Query, status, Cookie
+from fastapi.responses import HTMLResponse, FileResponse
 from mako.lookup import TemplateLookup
+from typing import Optional
 
 import auth
 import db_tables as dbt
@@ -21,6 +22,20 @@ lookup = TemplateLookup(directories=[os.path.dirname(os.path.dirname(os.path.abs
 RESOURCES_WHITE_LIST = None
 
 #TODO: async..await
+
+
+def get_username_from_session_model(session_model: auth.SessionData):
+    return session_model.user.username if session_model else ""
+
+
+@app.get("/", response_class=HTMLResponse)
+def get_home(session_data: Optional[str] = Cookie(None)):
+    """Возвращает стартовую страницу"""
+    session_model = auth.verify_session(session_data)
+    template = lookup.get_template("Frontend/home.html")
+    html_content = template.render(auth_username=get_username_from_session_model(session_model))
+    return HTMLResponse(content=html_content)
+
 
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
