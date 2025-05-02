@@ -268,6 +268,24 @@ def get_edit_university(id: str,
     return HTMLResponse(content=html_content)
 
 
+@app.get("/universities/{id}", response_class=HTMLResponse)
+def get_univ_data(id: str,
+                  session_data: Optional[str] = Cookie(None)):
+    """Возвращает страницу с данными о вузе по его id в базе данных"""
+    session_model = auth.verify_session(session_data)
+    db_session = create_db_session()
+    try:
+        univ = db_session.query(dbt.University).filter_by(id=id).first()
+        if not univ:
+            raise HTTPException(status_code=404, detail="University not found")
+        template = lookup.get_template("Frontend/university.html")
+        html_content = template.render(univ=univ, auth_username=get_username_from_session_model(session_model),
+                                       can_edit=session_model and session_model.user.access_level >= dm.EDITOR_ACCESS)
+        return HTMLResponse(content=html_content)
+    finally:
+        db_session.close()
+
+
 @app.post("/register")
 def register_new_user(data: dm.UserRegData):
     """Регистрирует нового пользователя, сразу авторизуя его"""
