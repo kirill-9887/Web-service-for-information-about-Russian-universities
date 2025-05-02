@@ -7,7 +7,7 @@ import threading
 
 from sqlalchemy import and_, or_, desc
 from fastapi import FastAPI, HTTPException, Query, status, Cookie
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from mako.lookup import TemplateLookup
 from typing import Optional
 
@@ -137,6 +137,57 @@ def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
                                    mode="new",
                                    auth_username=session_model.user.username)
     return HTMLResponse(content=html_content)
+
+
+@app.post("/{mode}/eduprogram", response_class=JSONResponse)
+def post_edit_eduprogram(data: dm.EduProg,
+                         mode: str,
+                         session_data: Optional[str] = Cookie(None)):
+    """
+    Обновляет или добавляет данные об образовательной программе в БД
+    В случае успеха создания новой записи возвращает ее id
+    """
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.EDITOR_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    try:
+        if mode == "new":
+            eduprog = dbt.EduProg.add(data)
+            return JSONResponse({"detail": "Successfully", "id": eduprog.id})
+        elif mode == "edit":
+            dbt.EduProg.update(data)
+            return JSONResponse({"detail": "Successfully"})
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+    except dbt.RecordNotFoundError:
+        raise HTTPException(status_code=404, detail="Образовательная программа не найдена")
+    except dbt.NotUnivException:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Данные об образовательной программе не указывают на ее принадлежность к высшему образованию")
+    except Exception as e:
+        print(f"Ошибка при попытке обработать образовательную программу: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
+
+
+@app.post("/delete/eduprogram/{id}", response_class=JSONResponse)
+def post_delete_eduprogram(id: str,
+                           session_data: Optional[str] = Cookie(None)):
+    """Удаляет ОП с данным id из БД"""
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.EDITOR_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    try:
+        dbt.EduProg.delete(id)
+        return JSONResponse({"detail": "Successfully"})
+    except dbt.RecordNotFoundError:
+        raise HTTPException(status_code=404, detail="Образовательная программа не найдена")
+    except Exception as e:
+        print(f"Ошибка при попытке удалить ОП: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
 
 
 @app.post("/register")
