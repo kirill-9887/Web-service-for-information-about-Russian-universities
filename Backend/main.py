@@ -426,6 +426,24 @@ def logout_all(session_data: Optional[str] = Cookie(None)):
     dbt.Session.end(session_model.user.id, exclude_id=session_model.session_id)
 
 
+@app.post("/change_personal_data", response_class=JSONResponse)
+def change_personal_data(data: dm.UserPersonalData,
+                         session_data: Optional[str] = Cookie(None)):
+    """Изменяет личные данные пользователя от самого пользователя"""
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы не авторизованы")
+    try:
+        dbt.User.update_personal_data(id=session_model.user.id,
+                                      personal_data=data)
+        return JSONResponse({"detail": "Профиль обновлен"})
+    except dbt.UniqueConstraintFailedError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Имя пользователя уже занято")
+    except Exception as e:
+        print("ERROR:", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить данные. Попробуйте позже")
+
+
 @app.post("/change_password", response_class=JSONResponse)
 def change_password(data: dm.ChangePasswordData,
                     session_data: Optional[str] = Cookie(None)):
