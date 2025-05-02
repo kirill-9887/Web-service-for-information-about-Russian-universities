@@ -1,6 +1,7 @@
 import sqlalchemy
 from sqlalchemy import and_, or_
 from fastapi import FastAPI, HTTPException, Query
+from mako.lookup import TemplateLookup
 
 import auth
 import db_tables as dbt
@@ -8,6 +9,8 @@ import data_models as dm
 from database import create_db_session
 
 app = FastAPI()
+lookup = TemplateLookup(directories=[os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
+                        module_directory=None)
 
 #TODO: async..await
 
