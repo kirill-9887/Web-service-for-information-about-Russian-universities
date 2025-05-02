@@ -466,23 +466,23 @@ def change_password(data: dm.ChangePasswordData,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить пароль. Попробуйте позже")
 
 
-@app.post("/add_admin_rights")
-def add_admin_rights(data: dm.ChangeAccessData):
+@app.post("/set_rights", response_class=JSONResponse)
+def set_rights(data: dm.ChangeAccessData = Body(),
+               session_data: Optional[str] = Cookie(None)):
     """Назначает права пользователю"""
-    user_id = auth.verify_token(data.token)
-    if not user_id:
-        return dm.BaseResult(status_ok=False, error="Invalid token")
-    db_session = create_db_session()
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.ADMIN_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
-        user = db_session.query(dbt.User).filter_by(user_id=user_id).first()
-        if user.access_level != dm.ADMIN_ACCESS:
-            return dm.BaseResult(status_ok=False, error="Not enough rights")
-        target_user = db_session.query(dbt.User).filter_by(username=data.username).first()
-        target_user.access_level = data.new_access_level
-        db_session.commit()
-        return dm.BaseResult(status_ok=True)
-    finally:
-        db_session.close()
+        dbt.User.update_access_level(data.username, data.new_access_level)
+    except dbt.RecordNotFoundError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Такого пользователя не существует")
+    except Exception as e:
+        print("ERROR:", e)
+        raise e
+
 
 # Служебные
 
