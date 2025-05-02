@@ -190,7 +190,37 @@ def post_delete_eduprogram(id: str,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось внести изменения. Попробуйте позже")
 
 
-
+@app.get("/universities", response_class=HTMLResponse)
+def get_univ_list(session_data: Optional[str] = Cookie(None),
+                       page: int = Query(default=1, ge=1),
+                       page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
+                       region: str = "",
+                       search: str = "",
+                       sort: str = "short_name",
+                       reverse: int = 0):
+    """Возвращает страницу с таблицей вузов"""
+    session_model = auth.verify_session(session_data)
+    offset = (page - 1) * page_size
+    order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
+    db_session = create_db_session()
+    try:
+        univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
+                    dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
+        all_univs_count = univs_query.count()
+        univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
+        regions_list = [region.name for region in db_session.query(dbt.Region).order_by(dbt.Region.name).all()]
+        univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
+        template = lookup.get_template("Frontend/index.html")
+        html_content = template.render(regions=regions_list, regionFilter=region, univs_json=univs_json, sortColumn=sort, reverse=reverse,
+                                       currentPage=page, itemsPerPage=page_size, maxPage=max(1, ceil(all_univs_count / page_size)),
+                                       nameSearchFilter=search, auth_username=get_username_from_session_model(
+                session_model),
+                                       can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS if session_model else False)
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        print("ERROR:", e)
+    finally:
+        db_session.close()
 
 
 @app.get("/universities/edit/{id}", response_class=HTMLResponse)
@@ -238,7 +268,22 @@ def get_edit_university(id: str,
     return HTMLResponse(content=html_content)
 
 
-
+@app.get("/universities/{id}", response_class=HTMLResponse)
+def get_univ_data(id: str,
+                  session_data: Optional[str] = Cookie(None)):
+    """Возвращает страницу с данными о вузе по его id в базе данных"""
+    session_model = auth.verify_session(session_data)
+    db_session = create_db_session()
+    try:
+        univ = db_session.query(dbt.University).filter_by(id=id).first()
+        if not univ:
+            raise HTTPException(status_code=404, detail="University not found")
+        template = lookup.get_template("Frontend/university.html")
+        html_content = template.render(univ=univ, auth_username=get_username_from_session_model(session_model),
+                                       can_edit=session_model and session_model.user.access_level >= dm.EDITOR_ACCESS)
+        return HTMLResponse(content=html_content)
+    finally:
+        db_session.close()
 
 
 @app.post("/{mode}/university", response_class=JSONResponse)
@@ -381,29 +426,26 @@ def logout_all(session_data: Optional[str] = Cookie(None)):
     dbt.Session.end(session_model.user.id, exclude_id=session_model.session_id)
 
 
-@app.post("/changepassword")
-def change_password(data: dm.ChangePasswordData):
+@app.post("/change_password", response_class=JSONResponse)
+def change_password(data: dm.ChangePasswordData,
+                    session_data: Optional[str] = Cookie(None)):
     """Изменяет пароль пользователя, завершает все сессии, кроме текущей"""
-    user_id = auth.verify_token(data.token)
-    if not user_id:
-        return dm.ChangePasswordResult(status_ok=False, error="Invalid token")
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы не авторизованы")
     if data.new_password != data.repeated_password:
-        return dm.ChangePasswordResult(status_ok=False, error="New passwords don't match")
-    db_session = create_db_session()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Пароли не совпадают")
+    user = dbt.User.get_by_id(session_model.user.id)
+    if not auth.verify_password(user.password_hash, data.password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный пароль")
     try:
-        user = db_session.query(dbt.User).filter_by(user_id=user_id).first()
-        if not auth.verify_password(user.password_hash, data.password):
-            return dm.ChangePasswordResult(status_ok=False, error="Invalid password")
-        user.password_hash = auth.hash_password(data.new_password)
-        db_session.commit()
-        logout_all(dm.SessionToken(token=data.token))
-        return dm.ChangePasswordResult(status_ok=True)
-    except sqlalchemy.exc.IntegrityError as e:  # TODO: нужно ли?
-        db_session.rollback()
-        print(f"Ошибка при изменении пароля: {e}")
-        return dm.ChangePasswordResult(status_ok=False, error="Unknown error")
-    finally:
-        db_session.close()
+        dbt.User.update_password_hash(id=session_model.user.id,
+                                      password_hash=auth.hash_password(data.new_password))
+        dbt.Session.end(session_model.user.id, exclude_id=session_model.session_id)
+        return JSONResponse({"status_ok": True, "detail": "Пароль успешно изменен. Завершены все сессии, кроме текущей"})
+    except Exception as e:
+        print("ERROR:", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить пароль. Попробуйте позже")
 
 
 @app.post("/add_admin_rights")
@@ -423,58 +465,6 @@ def add_admin_rights(data: dm.ChangeAccessData):
         return dm.BaseResult(status_ok=True)
     finally:
         db_session.close()
-
-
-@app.get("/universities", response_class=HTMLResponse)
-def get_univ_list(session_data: Optional[str] = Cookie(None),
-                       page: int = Query(default=1, ge=1),
-                       page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
-                       region: str = "",
-                       search: str = "",
-                       sort: str = "short_name",
-                       reverse: int = 0):
-    """Возвращает страницу с таблицей вузов"""
-    session_model = auth.verify_session(session_data)
-    offset = (page - 1) * page_size
-    order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
-    db_session = create_db_session()
-    try:
-        univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
-                    dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
-        all_univs_count = univs_query.count()
-        univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
-        regions_list = [region.name for region in db_session.query(dbt.Region).order_by(dbt.Region.name).all()]
-        univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
-        template = lookup.get_template("Frontend/index.html")
-        html_content = template.render(regions=regions_list, regionFilter=region, univs_json=univs_json, sortColumn=sort, reverse=reverse,
-                                       currentPage=page, itemsPerPage=page_size, maxPage=max(1, ceil(all_univs_count / page_size)),
-                                       nameSearchFilter=search, auth_username=get_username_from_session_model(
-                session_model),
-                                       can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS if session_model else False)
-        return HTMLResponse(content=html_content)
-    except Exception as e:
-        print("ERROR:", e)
-    finally:
-        db_session.close()
-
-
-@app.get("/universities/{id}", response_class=HTMLResponse)
-def get_univ_data(id: str,
-                  session_data: Optional[str] = Cookie(None)):
-    """Возвращает страницу с данными о вузе по его id в базе данных"""
-    session_model = auth.verify_session(session_data)
-    db_session = create_db_session()
-    try:
-        univ = db_session.query(dbt.University).filter_by(id=id).first()
-        if not univ:
-            raise HTTPException(status_code=404, detail="University not found")
-        template = lookup.get_template("Frontend/university.html")
-        html_content = template.render(univ=univ, auth_username=get_username_from_session_model(session_model),
-                                       can_edit=session_model and session_model.user.access_level >= dm.EDITOR_ACCESS)
-        return HTMLResponse(content=html_content)
-    finally:
-        db_session.close()
-
 
 # Служебные
 
