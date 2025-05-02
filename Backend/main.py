@@ -3,6 +3,8 @@ from sqlalchemy import and_, or_
 from fastapi import FastAPI, HTTPException, Query
 import uvicorn
 import threading
+from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from mako.lookup import TemplateLookup
 
 import auth
@@ -10,9 +12,13 @@ import db_tables as dbt
 import data_models as dm
 from database import create_db_session
 
+import os
+import config
+
 app = FastAPI()
 lookup = TemplateLookup(directories=[os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
                         module_directory=None)
+RESOURCES_WHITE_LIST = None
 
 #TODO: async..await
 
@@ -213,7 +219,28 @@ def get_univ_data(id: str):
     finally:
         db_session.close()
 
+
+# Служебные
+
+def get_all_relpaths(directory: str):
+    """Возвращает список относительных путей к файлам в заданном каталоге"""
+    white_list = []
+    for root, directories, files in os.walk(directory):
+        for file in files:
+            white_list.append(os.path.relpath(os.path.join(root, file), directory))
+    return white_list
+
+
+@app.get("/{filename}", response_class=FileResponse)
+def get_resource(filename: str):
+    path = os.path.join(config.RESOURCES_RELATIVE_CATALOG, filename)
+    if filename not in RESOURCES_WHITE_LIST:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return FileResponse(path)
+
+
 if __name__ == "__main__":
+    RESOURCES_WHITE_LIST = get_all_relpaths(config.RESOURCES_RELATIVE_CATALOG)
     dbt.create_tables()
     import webbrowser
     host="0.0.0.0"
