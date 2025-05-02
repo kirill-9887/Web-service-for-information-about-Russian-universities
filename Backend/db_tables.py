@@ -18,7 +18,6 @@ import data_models as dm
 
 def create_tables():
     Base.metadata.create_all(engine)
-    print("Таблицы созданы")
     refresh_tip_tables()
 
 
@@ -74,6 +73,8 @@ class University(Base):
     head_edu_org = relationship("University", back_populates="branches", remote_side=[id])
     branches = relationship("University", back_populates="head_edu_org")
     eduprogs = relationship("EduProg", back_populates="university")
+    name_search = Column(TEXT)
+
 
 class NotUnivException(Exception):
     def __str__(self):
@@ -81,11 +82,13 @@ class NotUnivException(Exception):
 
 
 @event.listens_for(University, 'before_insert')
-def before_insert_listener(mapper, connection, target):
+@event.listens_for(University, 'before_update')
+def university_before_listener(mapper, connection, target):
     """Проверяет, является ли учебная организация филиалом, а также высшего образования ли она"""
-    if target.is_branch is None:
-        target.is_branch = int("филиал" in str(target.full_name).lower())
-    if not ("высшего" in str(target.full_name).lower() or "высшего" in str(target.type_name).lower()):
+    target.name_search = target.full_name.lower() + " " + target.short_name.lower()
+    if target.head_edu_org_id == "":
+        target.head_edu_org_id = None
+    if "колледж" in str(target.full_name).lower() or not ("высшего" in str(target.full_name).lower() or "высшего" in str(target.type_name).lower()):
         raise NotUnivException
 
 
