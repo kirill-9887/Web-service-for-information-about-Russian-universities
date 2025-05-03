@@ -1,7 +1,7 @@
 import json
 import uvicorn
 import threading
-from sqlalchemy import desc
+from sqlalchemy import desc, select
 from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from mako.lookup import TemplateLookup
@@ -57,7 +57,11 @@ def get_eduprograms(session_data: Optional[str] = Cookie(None),
             dbt.EduProg.programm_code == prog_code if prog_code else True,
             dbt.EduProg.university_id == univ_id if univ_id else True)
         all_eduprogs_count = eduprogs_query.count()
-        eduprogs = eduprogs_query.order_by(order, dbt.EduProg.programm_code).offset(offset).limit(page_size).all()
+        if sort == "university.full_name":
+            eduprogs = eduprogs_query.join(dbt.University).order_by(order, dbt.EduProg.programm_code)
+        else:
+            eduprogs = eduprogs_query.order_by(order, dbt.EduProg.programm_code)
+        eduprogs = eduprogs.offset(offset).limit(page_size).all()
         eduprogs_json = json.dumps([dm.base2model(eduprog, dm.EduProgForView, university_full_name=eduprog.university.full_name).model_dump() for eduprog in eduprogs])
         ugs_list = [ugs.code for ugs in db_session.query(dbt.Ugs).order_by(dbt.Ugs.code).all()]  # TODO: кеширование
         prog_code_list = [prog_code.code for prog_code in db_session.query(dbt.ProgCode).order_by(dbt.ProgCode.code).all()]  # TODO: кеширование
