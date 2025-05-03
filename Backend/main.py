@@ -51,6 +51,8 @@ def get_eduprograms(session_data: Optional[str] = Cookie(None),
         order = dbt.University.full_name if not reverse else desc(dbt.University.full_name)
     else:
         order = getattr(dbt.EduProg, sort) if not reverse else getattr(dbt.EduProg, sort).desc()
+    ugs_list = dbt.Ugs.get_list()
+    prog_code_list = dbt.ProgCode.get_list()
     db_session = create_db_session()
     try:
         eduprogs_query = db_session.query(dbt.EduProg).filter(dbt.EduProg.ugs_code == ugs if ugs else True,
@@ -63,8 +65,6 @@ def get_eduprograms(session_data: Optional[str] = Cookie(None),
             eduprogs = eduprogs_query.order_by(order, dbt.EduProg.programm_code)
         eduprogs = eduprogs.offset(offset).limit(page_size).all()
         eduprogs_json = json.dumps([dm.base2model(eduprog, dm.EduProgForView, university_full_name=eduprog.university.full_name).model_dump() for eduprog in eduprogs])
-        ugs_list = [ugs.code for ugs in db_session.query(dbt.Ugs).order_by(dbt.Ugs.code).all()]  # TODO: кеширование
-        prog_code_list = [prog_code.code for prog_code in db_session.query(dbt.ProgCode).order_by(dbt.ProgCode.code).all()]  # TODO: кеширование
         template = lookup.get_template("Frontend/eduprograms.html")
         html_content = template.render(ugsList=ugs_list, ugsFilter=ugs, progCodeList=prog_code_list,
                                        progCodeFilter=prog_code, eduprogs_json=eduprogs_json, univ_id=univ_id,
@@ -201,13 +201,13 @@ def get_univ_list(session_data: Optional[str] = Cookie(None),
     session_model = auth.verify_session(session_data)
     offset = (page - 1) * page_size
     order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
+    regions_list = dbt.Region.get_list()
     db_session = create_db_session()
     try:
         univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
                     dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
         all_univs_count = univs_query.count()
         univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
-        regions_list = [region.name for region in db_session.query(dbt.Region).order_by(dbt.Region.name).all()]
         univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
         template = lookup.get_template("Frontend/index.html")
         html_content = template.render(regions=regions_list, regionFilter=region, univs_json=univs_json, sortColumn=sort, reverse=reverse,

@@ -358,11 +358,57 @@ class EduProg(Base):
             db_session.close()
 
 
-create_tables()
+
+class InMemoryCache:
+    """
+    Класс для кеширования данных в оперативной памяти
+    Данные хранятся в словаре {"tablename:ident": value,}
+    """
+    _cache = dict()
+
+    @classmethod
+    def _get_key(cls, tablename, ident):
+        key = f"{tablename}:{ident}"
+        return key
+
+    @classmethod
+    def set_to_cache(cls, tablename, ident, value):
+        InMemoryCache._cache[cls._get_key(tablename, ident)] = value
+
+    @classmethod
+    def get_from_cache(cls, tablename, ident):
+        try:
+            return InMemoryCache._cache[cls._get_key(tablename, ident)]
+        except KeyError:
+            return None
+
+    @classmethod
+    def invalidate(cls, tablename, ident=None):
+        if not ident:
+            for key in InMemoryCache._cache.keys():
+                if key.starttswith(tablename):
+                    del InMemoryCache._cache[key]
+            return
+        try:
+            del InMemoryCache._cache[cls._get_key(tablename, ident)]
+        except KeyError:
+            pass
+
+
 class Region(Base):
     """Таблица, которая содержит список регионов (для поля фильтрации)"""
     __tablename__ = "regions"
     name = Column(TEXT, primary_key=True)
+
+    @classmethod
+    def get_list(cls):
+        """Возвращает отсортированный список регионов"""
+        regions_list = InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        if regions_list:
+            return regions_list
+        with create_db_session() as db_session:
+            InMemoryCache.set_to_cache(cls.__tablename__, 0, [region.name for region in db_session.query(cls).order_by(cls.name).all()])
+            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
 
     @classmethod
     def refresh(cls):
@@ -373,6 +419,7 @@ class Region(Base):
             db_session.query(Region).delete()
             db_session.add_all(Region(name=region[0]) for region in regions)
             db_session.commit()
+            InMemoryCache.invalidate(cls.__tablename__)
         except Exception as e:
             db_session.rollback()
             raise e
@@ -386,6 +433,17 @@ class Ugs(Base):
     code = Column(TEXT, primary_key=True)
 
     @classmethod
+    def get_list(cls):
+        """Возвращает отсортированный список ugs-кодов"""
+        ugs_list = InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        if ugs_list:
+            return ugs_list
+        with create_db_session() as db_session:
+            InMemoryCache.set_to_cache(cls.__tablename__, 0,
+                                       [ugs.code for ugs in db_session.query(cls).order_by(cls.code).all()])
+            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
+
+    @classmethod
     def refresh(cls):
         """Формирует список кодов укрупненных групп специальностей, встречающихся в таблице образовательных программ"""
         db_session = create_db_session()
@@ -394,6 +452,7 @@ class Ugs(Base):
             db_session.query(Ugs).delete()
             db_session.add_all(Ugs(code=ugs_code[0]) for ugs_code in ugs_codes)
             db_session.commit()
+            InMemoryCache.invalidate(cls.__tablename__)
         except Exception as e:
             db_session.rollback()
             raise e
@@ -407,6 +466,17 @@ class ProgCode(Base):
     code = Column(TEXT, primary_key=True)
 
     @classmethod
+    def get_list(cls):
+        """Возвращает отсортированный список кодов специальностей"""
+        progcodes_list = InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        if progcodes_list:
+            return progcodes_list
+        with create_db_session() as db_session:
+            InMemoryCache.set_to_cache(cls.__tablename__, 0,
+                                       [prog_code.code for prog_code in db_session.query(cls).order_by(cls.code).all()])
+            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
+
+    @classmethod
     def refresh(cls):
         """Формирует список кодов специальностей, встречающихся в таблице образовательных программ"""
         db_session = create_db_session()
@@ -415,6 +485,7 @@ class ProgCode(Base):
             db_session.query(ProgCode).delete()
             db_session.add_all(ProgCode(code=prog_code[0]) for prog_code in prog_codes)
             db_session.commit()
+            InMemoryCache.invalidate(cls.__tablename__)
         except Exception as e:
             db_session.rollback()
             raise e
