@@ -1,7 +1,7 @@
 import json
 import uvicorn
 import threading
-from sqlalchemy import desc, select
+from sqlalchemy import desc, and_
 from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from mako.lookup import TemplateLookup
@@ -205,7 +205,7 @@ def get_univ_list(session_data: Optional[str] = Cookie(None),
     db_session = create_db_session()
     try:
         univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
-                    dbt.University.name_search.like(f"%{search.lower()}%") if search else True)  # TODO: split
+                    and_(dbt.University.name_search.like(f"%{word}%") for word in search.lower().split()) if search else True)
         all_univs_count = univs_query.count()
         univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
         univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump() for univ in univs])
