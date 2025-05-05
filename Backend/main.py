@@ -55,7 +55,8 @@ def get_eduprograms(session_data: Optional[str] = Cookie(None),
     prog_code_list = dbt.ProgCode.get_list()
     db_session = create_db_session()
     try:
-        eduprogs_query = db_session.query(dbt.EduProg).filter(dbt.EduProg.ugs_code == ugs if ugs else True,
+        eduprogs_query = db_session.query(dbt.EduProg).filter(dbt.EduProg.deleted == 0,
+            dbt.EduProg.ugs_code == ugs if ugs else True,
             dbt.EduProg.programm_code == prog_code if prog_code else True,
             dbt.EduProg.university_id == univ_id if univ_id else True)
         all_eduprogs_count = eduprogs_query.count()
@@ -90,17 +91,10 @@ def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     if session_model.user.access_level < dm.EDITOR_ACCESS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    db_session = create_db_session()
-    try:
-        eduprog = db_session.query(dbt.EduProg).get(id)
-        university = db_session.query(dbt.University).get(eduprog.university_id)
-    except Exception as e:
-        print("ERROR:", e)
-        raise e
-    finally:
-        db_session.close()
+    eduprog = dbt.EduProg.get_by_id(id)
     if not eduprog:
         raise HTTPException(status_code=404)
+    university = dbt.University.get_by_id(eduprog.university_id)
     template = lookup.get_template("Frontend/eduprog_edit.html")
     html_content = template.render(eduprog=dm.base2model(eduprog, dm.EduProg).model_dump(),
                                    university_id=university.id,
@@ -119,14 +113,7 @@ def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     if session_model.user.access_level < dm.EDITOR_ACCESS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    db_session = create_db_session()
-    try:
-        university = db_session.query(dbt.University).get(univ_id)
-    except Exception as e:
-        print("ERROR:", e)
-        raise e
-    finally:
-        db_session.close()
+    university = dbt.University.get_by_id(univ_id)
     if not university:
         raise HTTPException(status_code=404)
     template = lookup.get_template("Frontend/eduprog_edit.html")
@@ -244,16 +231,12 @@ def get_edit_university(id: str,
         if branch_from:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
         mode = "edit"
-        db_session = create_db_session()
-        try:
-            univ = db_session.query(dbt.University).filter_by(id=id).first()
-            if not univ:
-                raise HTTPException(status_code=404)
-        finally:
-            db_session.close()
+        univ = dbt.University.get_by_id(id)
+        if not univ:
+            raise HTTPException(status_code=404)
     head_edu_org_name = ""
     if branch_from:
-        head_edu_org = dbt.University.get(branch_from)
+        head_edu_org = dbt.University.get_by_id(branch_from)
         if not head_edu_org:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Вуз с данным id не найден")
         if head_edu_org.is_branch:
@@ -273,7 +256,7 @@ def get_univ_data(id: str,
                   session_data: Optional[str] = Cookie(None)):
     """Возвращает страницу с данными о вузе по его id в базе данных"""
     session_model = auth.verify_session(session_data)
-    db_session = create_db_session()
+    db_session = create_db_session() # Используем непосредственно для сохранения возможности доступа к связанным записям
     try:
         univ = db_session.query(dbt.University).filter_by(id=id, deleted=0).first()
         if not univ:

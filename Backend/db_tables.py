@@ -37,6 +37,7 @@ def provide_uuid() -> str:
 def create_tables():
     Base.metadata.create_all(engine)
     refresh_tip_tables()
+    print("Таблицы созданы")
 
 
 def refresh_tip_tables():
@@ -77,13 +78,13 @@ class User(Base):
             db_session.close()
 
     @classmethod
-    def add(cls, data: dm.UserPersonalData, password_hash: str):
+    def add(cls, data: dm.UserPersonalData, password_hash: str) -> Type["User"]:
         db_session = create_db_session()
         try:
             user = User(**data.model_dump(), password_hash=password_hash)
             db_session.add(user)
             db_session.commit()
-            return dm.base2model(user, dm.User)
+            return user
         except Exception as e:
             db_session.rollback()
             if "UNIQUE constraint failed: users.username" in str(e):
@@ -93,7 +94,7 @@ class User(Base):
             db_session.close()
 
     @classmethod
-    def update_personal_data(cls, id: str, personal_data: dm.UserPersonalData):
+    def update_personal_data(cls, id: str, personal_data: dm.UserPersonalData) -> None:
         db_session = create_db_session()
         try:
             updated_row_count = db_session.query(User).filter_by(id=id).update({
@@ -154,12 +155,13 @@ class Session(Base):
 
     @classmethod
     def add(cls, token_hash: str, user_id: str) -> str:
+        """Возвращает id добавленной сессии"""
         db_session = create_db_session()
         try:
             session = Session(token_hash=token_hash, user_id=user_id)
             db_session.add(session)
             db_session.commit()
-            return session.id
+            return str(session.id)
         except Exception as e:
             db_session.rollback()
             raise e
@@ -167,7 +169,8 @@ class Session(Base):
             db_session.close()
 
     @classmethod
-    def end(cls, user_id: str, include_id: str = None, exclude_id: str = None):
+    def end(cls, user_id: str, include_id: str = None, exclude_id: str = None) -> int:
+        """Возвращает количество завершенных сессий"""
         db_session = create_db_session()
         try:
             updated_row_count = db_session.query(Session).filter(Session.user_id == user_id,
@@ -218,7 +221,7 @@ class University(Base):
     name_search = Column(TEXT)
 
     @classmethod
-    def get(cls, id: str) -> Type["University"] | None:
+    def get_by_id(cls, id: str) -> Type["University"] | None:
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
@@ -239,7 +242,7 @@ class University(Base):
                 univ.id = provide_uuid()
             db_session.add(univ)
             db_session.commit()
-            return dm.base2model(univ, dm.University)
+            return univ
         except Exception as e:
             db_session.rollback()
             if "UNIQUE" in str(e):
@@ -249,7 +252,7 @@ class University(Base):
             db_session.close()
 
     @classmethod
-    def update(cls, data: dm.University):
+    def update(cls, data: dm.University) -> Type["University"]:
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(data.id)
@@ -258,6 +261,7 @@ class University(Base):
             for column, value in data.model_dump().items():
                 setattr(univ, column, value)
             db_session.commit()
+            return univ
         except Exception as e:
             db_session.rollback()
             raise e
@@ -265,7 +269,7 @@ class University(Base):
             db_session.close()
 
     @classmethod
-    def delete(cls, id: str, from_parser: bool):
+    def delete(cls, id: str, from_parser: bool) -> None:
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
@@ -328,6 +332,17 @@ class EduProg(Base):
     university = relationship("University", back_populates="eduprogs")
 
     @classmethod
+    def get_by_id(cls, id: str) -> Type["EduProg"] | None:
+        db_session = create_db_session()
+        try:
+            eduprog = db_session.query(EduProg).get(id)
+            if eduprog and eduprog.deleted:
+                return None
+            return eduprog
+        finally:
+            db_session.close()
+
+    @classmethod
     def add(cls, data: dm.EduProg, custom: bool):
         db_session = create_db_session()
         try:
@@ -338,7 +353,7 @@ class EduProg(Base):
                 eduprog.id = provide_uuid()
             db_session.add(eduprog)
             db_session.commit()
-            return dm.base2model(eduprog, dm.EduProg)
+            return eduprog
         except Exception as e:
             db_session.rollback()
             if "UNIQUE" in str(e):
@@ -348,7 +363,7 @@ class EduProg(Base):
             db_session.close()
 
     @classmethod
-    def update(cls, data: dm.EduProg):
+    def update(cls, data: dm.EduProg) -> Type["EduProg"]:
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(data.id)
@@ -357,6 +372,7 @@ class EduProg(Base):
             for column, value in data.model_dump().items():
                 setattr(eduprog, column, value)
             db_session.commit()
+            return eduprog
         except Exception as e:
             db_session.rollback()
             raise e
@@ -364,7 +380,7 @@ class EduProg(Base):
             db_session.close()
 
     @classmethod
-    def delete(cls, id: str, from_parser: bool):
+    def delete(cls, id: str, from_parser: bool) -> None:
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(id)

@@ -16,7 +16,7 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 
 engine = sqlalchemy.create_engine(config.DATABASE_URL, echo=config.DB_ECHO)
 Base = declarative_base()
-DBSession = sessionmaker(bind=engine)
+DBSession = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def create_db_session():
