@@ -153,7 +153,7 @@ def post_edit_eduprogram(data: dm.EduProg,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
         if mode == "new":
-            eduprog = dbt.EduProg.add(data)
+            eduprog = dbt.EduProg.add(data, custom=True)
             return JSONResponse({"detail": "Successfully", "id": eduprog.id})
         elif mode == "edit":
             dbt.EduProg.update(data)
@@ -180,7 +180,7 @@ def post_delete_eduprogram(id: str,
     if session_model.user.access_level < dm.EDITOR_ACCESS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
-        dbt.EduProg.delete(id)
+        dbt.EduProg.delete(id, from_parser=False)
         return JSONResponse({"detail": "Successfully"})
     except dbt.RecordNotFoundError:
         raise HTTPException(status_code=404, detail="Образовательная программа не найдена")
@@ -204,7 +204,8 @@ def get_univ_list(session_data: Optional[str] = Cookie(None),
     regions_list = dbt.Region.get_list()
     db_session = create_db_session()
     try:
-        univs_query = db_session.query(dbt.University).filter(dbt.University.region_name == region if region else True,
+        univs_query = db_session.query(dbt.University).filter(dbt.University.deleted == 0,
+                    dbt.University.region_name == region if region else True,
                     and_(dbt.University.name_search.like(f"%{word}%") for word in search.lower().split()) if search else True)
         all_univs_count = univs_query.count()
         univs = univs_query.order_by(order, dbt.University.short_name).offset(offset).limit(page_size).all()
@@ -274,7 +275,7 @@ def get_univ_data(id: str,
     session_model = auth.verify_session(session_data)
     db_session = create_db_session()
     try:
-        univ = db_session.query(dbt.University).filter_by(id=id).first()
+        univ = db_session.query(dbt.University).filter_by(id=id, deleted=0).first()
         if not univ:
             raise HTTPException(status_code=404, detail="University not found")
         template = lookup.get_template("Frontend/university.html")
@@ -300,7 +301,7 @@ def post_edit_university(mode: str,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
         if mode == "new":
-            univ = dbt.University.add(data)
+            univ = dbt.University.add(data, custom=True)
             return JSONResponse({"detail": "Successfully", "id": univ.id})
         elif mode == "edit":
             dbt.University.update(data)
@@ -326,7 +327,7 @@ def post_delete_university(id: str,
     if session_model.user.access_level < dm.EDITOR_ACCESS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     try:
-        dbt.University.delete(id)
+        dbt.University.delete(id, from_parser=False)
         return JSONResponse({"detail": "Successfully"})
     except dbt.RecordNotFoundError:
         raise HTTPException(status_code=404, detail="Вуз не найден")

@@ -184,7 +184,11 @@ class Session(Base):
 
 
 class University(Base):
-    """Таблица данных об университетах из реестра"""
+    """
+    Таблица данных об университетах из реестра
+    custom=True, если запись создана пользователем, иначе данные из реестра
+    deleted=True, если запись получена из реестра, но удалена пользователем, тогда она не восстановится при обновлении данных
+    """
     __tablename__ = "universities"
     id = Column(String, primary_key=True)
     full_name = Column(TEXT)
@@ -206,6 +210,8 @@ class University(Base):
     type_name = Column(TEXT)
     region_name = Column(TEXT)
     federal_district_name = Column(TEXT)
+    custom = Column(Integer, default=0)
+    deleted = Column(Integer, default=0)
     head_edu_org = relationship("University", back_populates="branches", remote_side=[id])
     branches = relationship("University", back_populates="head_edu_org")
     eduprogs = relationship("EduProg", back_populates="university")
@@ -216,18 +222,20 @@ class University(Base):
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
+            if univ and univ.deleted:
+                return None
             return univ
         finally:
             db_session.close()
 
     @classmethod
-    def add(cls, data: dm.University, from_parser=False):
+    def add(cls, data: dm.University, custom: bool):
         db_session = create_db_session()
         try:
-            univ = University(**data.model_dump())
-            if univ.id and not from_parser:
+            univ = University(**data.model_dump(), custom=custom)
+            if univ.id and custom:
                 raise SelfCreatedIDError
-            if not from_parser:
+            if custom:
                 univ.id = provide_uuid()
             db_session.add(univ)
             db_session.commit()
@@ -257,13 +265,20 @@ class University(Base):
             db_session.close()
 
     @classmethod
-    def delete(cls, id: str):
+    def delete(cls, id: str, from_parser: bool):
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
             if not univ:
                 raise RecordNotFoundError
-            db_session.delete(univ)
+            if univ.custom and from_parser:
+                return
+            elif univ.custom and not from_parser or not univ.custom and from_parser:
+                db_session.delete(univ)
+            elif not univ.custom and not from_parser:
+                univ.deleted = 1
+                for eduprog in univ.eduprogs:
+                    eduprog.deleted = 1
             db_session.commit()
         except Exception as e:
             db_session.rollback()
@@ -289,7 +304,11 @@ def university_before_listener(mapper, connection, target):
 
 
 class EduProg(Base):
-    """Таблица данных об образовательных программах из реестра"""
+    """
+    Таблица данных об образовательных программах из реестра
+    custom=True, если запись создана пользователем, иначе данные из реестра
+    deleted=True, если запись получена из реестра, но удалена пользователем, тогда она не восстановится при обновлении данных
+    """
     __tablename__ = "educational_programs"
     id = Column(String, primary_key=True)
     type_name = Column(TEXT)
@@ -303,17 +322,19 @@ class EduProg(Base):
     is_accredited = Column(Integer)
     is_canceled = Column(Integer)
     is_suspended = Column(Integer)
+    custom = Column(Integer, default=0)
+    deleted = Column(Integer, default=0)
     university_id = Column(String, ForeignKey("universities.id", ondelete="CASCADE"))
     university = relationship("University", back_populates="eduprogs")
 
     @classmethod
-    def add(cls, data: dm.EduProg, from_parser=False):
+    def add(cls, data: dm.EduProg, custom: bool):
         db_session = create_db_session()
         try:
-            eduprog = EduProg(**data.model_dump())
-            if eduprog.id and not from_parser:
+            eduprog = EduProg(**data.model_dump(), custom=custom)
+            if eduprog.id and custom:
                 raise SelfCreatedIDError
-            if not from_parser:
+            if custom:
                 eduprog.id = provide_uuid()
             db_session.add(eduprog)
             db_session.commit()
@@ -343,13 +364,18 @@ class EduProg(Base):
             db_session.close()
 
     @classmethod
-    def delete(cls, id: str):
+    def delete(cls, id: str, from_parser: bool):
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(id)
             if not eduprog:
                 raise RecordNotFoundError
-            db_session.delete(eduprog)
+            if eduprog.custom and from_parser:
+                return
+            elif eduprog.custom and not from_parser or not eduprog.custom and from_parser:
+                db_session.delete(eduprog)
+            elif not eduprog.custom and not from_parser:
+                eduprog.deleted = 1
             db_session.commit()
         except Exception as e:
             db_session.rollback()
