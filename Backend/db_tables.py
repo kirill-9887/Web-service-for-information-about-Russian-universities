@@ -57,7 +57,7 @@ class User(Base):
     registrate_date = Column(TEXT, default=lambda: str(datetime.datetime.now(pytz.timezone('Europe/Moscow'))))
     password_hash = Column(TEXT, nullable=False)
     access_level = Column(Integer, default=dm.READER_ACCESS)
-    sessions = relationship("Session", back_populates="user")
+    sessions = relationship("Session", back_populates="user", cascade="all")
 
     @classmethod
     def get_by_id(cls, id: str) -> Type["User"] | None:
@@ -135,6 +135,19 @@ class User(Base):
             updated_row_count = db_session.query(User).filter_by(username=username).update({User.access_level: access_level})
             if not updated_row_count:
                 raise RecordNotFoundError
+            db_session.commit()
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+    @classmethod
+    def delete_user(cls, id: str):
+        db_session = create_db_session()
+        try:
+            user = db_session.query(User).get(id)
+            db_session.delete(user)
             db_session.commit()
         except Exception as e:
             db_session.rollback()

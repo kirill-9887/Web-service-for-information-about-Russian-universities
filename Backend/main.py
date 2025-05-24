@@ -371,6 +371,15 @@ def register_new_user(data: dm.UserRegData = Body()):
     return generate_session_token_response(session_id, session_token)
 
 
+@app.delete("/delete-user")
+def delete_user(session_data: Optional[str] = Cookie(None)):
+    """Удаляет пользователя по его запросу"""
+    if not session_data:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    session_model = auth.verify_session(session_data)
+    dbt.User.delete_user(id=session_model.user.id)
+
+
 @app.post("/login", response_class=JSONResponse)
 def login(data: dm.LoginData = Body()):
     """Авторизует пользователя: генерирует токен и создает сессию"""
