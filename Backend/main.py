@@ -37,6 +37,20 @@ async def validation_exception_handler(request, exc):
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=details)
 
 
+def verify_session(session_data: str, min_access_level: int = dm.GUEST_ACCESS) -> auth.SessionData | None:
+    """
+    :param session_data: Session data from cookie
+    :param min_access_level: Minimum access level for successful verification
+    :return: The session model with the fields user, session id, and session token. None if the session is invalid
+    """
+    session_model = auth.verify_session(session_data)
+    if min_access_level > dm.GUEST_ACCESS and not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model and session_model.user.access_level < min_access_level:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    return session_model
+
+
 @app.get("/", response_class=HTMLResponse)
 def get_home(session_data: Optional[str] = Cookie(None)):
     """Возвращает стартовую страницу"""
@@ -97,11 +111,7 @@ def get_eduprograms(session_data: Optional[str] = Cookie(None),
 def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
                         id: str = None):
     """Возвращает страницу для редактирования образовательной программы под данным id в БД"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    session_model = verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     eduprog = dbt.EduProg.get_by_id(id)
     if not eduprog:
         raise HTTPException(status_code=404)
@@ -119,11 +129,7 @@ def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
 def get_edit_eduprogram(session_data: Optional[str] = Cookie(None),
                         univ_id: str = None):
     """Возвращает страницу для добавления образовательной программы для конкретного вуза в БД"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    session_model = verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     university = dbt.University.get_by_id(univ_id)
     if not university:
         raise HTTPException(status_code=404)
@@ -144,11 +150,7 @@ def post_edit_eduprogram(data: dm.EduProg,
     Обновляет или добавляет данные об образовательной программе в БД
     В случае успеха создания новой записи возвращает ее id
     """
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     try:
         if mode == "new":
             eduprog = dbt.EduProg.add(data, custom=True)
@@ -172,11 +174,7 @@ def post_edit_eduprogram(data: dm.EduProg,
 def post_delete_eduprogram(id: str,
                            session_data: Optional[str] = Cookie(None)):
     """Удаляет ОП с данным id из БД"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     try:
         dbt.EduProg.delete(id, from_parser=False)
         return JSONResponse({"detail": "Successfully"})
@@ -196,7 +194,7 @@ def get_univ_list(session_data: Optional[str] = Cookie(None),
                        sort: str = "short_name",
                        reverse: int = 0):
     """Возвращает страницу с таблицей вузов"""
-    session_model = auth.verify_session(session_data)
+    session_model = verify_session(session_data=session_data)
     offset = (page - 1) * page_size
     order = getattr(dbt.University, sort) if not reverse else getattr(dbt.University, sort).desc()
     regions_list = dbt.Region.get_list()
@@ -231,11 +229,7 @@ def get_edit_university(id: str,
     /universities/edit/new - добавить головную организацию
     /universities/edit/new?branch_from=1a2b3c - добавить филиал для головной организации с id=1a2b3c
     """
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    session_model = verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     univ = None
     mode = "new"
     if id != "new":
@@ -266,8 +260,8 @@ def get_edit_university(id: str,
 def get_univ_data(id: str,
                   session_data: Optional[str] = Cookie(None)):
     """Возвращает страницу с данными о вузе по его id в базе данных"""
-    session_model = auth.verify_session(session_data)
-    db_session = create_db_session() # Используем непосредственно для сохранения возможности доступа к связанным записям
+    session_model = verify_session(session_data=session_data)
+    db_session = create_db_session() # Используем непосредственно для сохранения возможности доступа к связанным записям #TODO проверить
     try:
         univ = db_session.query(dbt.University).filter_by(id=id, deleted=0).first()
         if not univ:
@@ -288,11 +282,7 @@ def post_edit_university(mode: str,
     Обновляет или добавляет данные о вузе в БД
     В случае успеха создания новой записи возвращает ее id
     """
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     try:
         if mode == "new":
             univ = dbt.University.add(data, custom=True)
@@ -315,11 +305,7 @@ def post_edit_university(mode: str,
 def post_delete_university(id: str,
                            session_data: Optional[str] = Cookie(None)):
     """Удаляет вуз с данным id из БД, а также удаляются связанные образовательные программы"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.EDITOR_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    verify_session(session_data=session_data, min_access_level=dm.EDITOR_ACCESS)
     try:
         dbt.University.delete(id, from_parser=False)
         return JSONResponse({"detail": "Successfully"})
@@ -333,16 +319,14 @@ def post_delete_university(id: str,
 @app.get("/profile", response_class=HTMLResponse)
 def get_user_profile(session_data: Optional[str] = Cookie(None)):
     """Возвращает страницу профиль пользователя"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    session_model = verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
     user = session_model.user
     template = lookup.get_template("Frontend/profile.html")
     html_content = template.render(name=user.name,
                                    surname=user.surname,
                                    patronymic=user.patronymic,
                                    auth_username=user.username,
-                                   can_edit=session_model.user.access_level >= dm.EDITOR_ACCESS)
+                                   can_edit=session_model.user.access_level >= dm.ADMIN_ACCESS)
     return HTMLResponse(content=html_content)
 
 
@@ -373,11 +357,7 @@ def create_new_session(user_id: str):
 def create_user(user_data: dm.UserInfoData = Body(),
                 session_data: Optional[str] = Cookie(None)):
     """Создает запись о новом пользователе в БД. Пользователю потребуется завершить регистрацию"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.ADMIN_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
     reset_token = auth.generate_reset_token()
     try:
         user_id = dbt.User.add(
@@ -437,8 +417,7 @@ def register_new_user(data: dm.UserRegData = Body()):
 @app.delete("/delete-user")
 def delete_user(session_data: Optional[str] = Cookie(None)):
     """Удаляет пользователя по его запросу"""
-    if not session_data:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
     session_model = auth.verify_session(session_data)
     dbt.User.delete_user(id=session_model.user.id)
 
@@ -456,9 +435,7 @@ def login(data: dm.LoginData = Body()):
 @app.post("/logout", response_class=JSONResponse)
 def logout(session_data: Optional[str] = Cookie(None)):
     """Завершает текущую сессию"""
-    if not session_data:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    session_model = auth.verify_session(session_data)
+    session_model = verify_session(session_data=session_data)
     if not session_model:
         return
     dbt.Session.end(session_model.user.id, include_id=session_model.session_id)
@@ -467,21 +444,15 @@ def logout(session_data: Optional[str] = Cookie(None)):
 @app.post("/logout/all", response_class=JSONResponse)
 def logout_all(session_data: Optional[str] = Cookie(None)):
     """Завершить все сессии, кроме текущей"""
-    if not session_data:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы уже не авторизованы")
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный токен. Скорее всего ваша сессия истекла")
+    session_model = verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
     dbt.Session.end(session_model.user.id, exclude_id=session_model.session_id)
 
 
 @app.post("/change_personal_data", response_class=JSONResponse)
 def change_personal_data(data: dm.UserOwnData,
                          session_data: Optional[str] = Cookie(None)):
-    """Изменяет личные данные пользователя от самого пользователя"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы не авторизованы")
+    """Изменяет личные данные пользователя от имени самого пользователя"""
+    session_model = verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
     try:
         dbt.User.update_personal_data(id=session_model.user.id,
                                       personal_data=data)
@@ -490,16 +461,15 @@ def change_personal_data(data: dm.UserOwnData,
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Имя пользователя уже занято")
     except Exception as e:
         print("ERROR:", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить данные. Попробуйте позже")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить данные. "
+                                                                                      "Попробуйте позже")
 
 
 @app.post("/change_password", response_class=JSONResponse)
 def change_password(data: dm.ChangePasswordData,
                     session_data: Optional[str] = Cookie(None)):
     """Изменяет пароль пользователя, завершает все сессии, кроме текущей"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы не авторизованы")
+    session_model = verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
     user = dbt.User.get_by_id(session_model.user.id)
     if not auth.verify_password(user.password_hash, data.password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный пароль")
@@ -517,18 +487,11 @@ def change_password(data: dm.ChangePasswordData,
 def set_rights(data: dm.ChangeAccessData = Body(),
                session_data: Optional[str] = Cookie(None)):
     """Назначает права пользователю"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.ADMIN_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
     try:
         dbt.User.update_access_level(data.username, data.new_access_level)
     except dbt.RecordNotFoundError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Такого пользователя не существует")
-    except Exception as e:
-        print("ERROR:", e)
-        raise e
 
 
 @app.get("/users", response_class=HTMLResponse)
@@ -536,11 +499,7 @@ def get_users_data(session_data: Optional[str] = Cookie(None),
                    page: int = Query(default=1, ge=1),
                    page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1)):
     """Возвращает страницу с таблицей данных о зарегистрированных пользователях"""
-    session_model = auth.verify_session(session_data)
-    if not session_model:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    if session_model.user.access_level < dm.ADMIN_ACCESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    session_model = verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
     offset = (page - 1) * page_size
     with create_db_session() as db_session:
         users_query = db_session.query(dbt.User)

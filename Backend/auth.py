@@ -54,7 +54,7 @@ def verify_password(password_hash, password) -> bool:
 
 
 def verify_session(session_data: str) -> SessionData | None:
-    """Возвращает объект User, если сессия действительна, иначе None"""
+    """Возвращает объект User, id сессии и сессионный токен, если сессия действительна, иначе None"""
     if not session_data:
         return None
     session_id, session_token = session_data.split("&")

@@ -8,8 +8,8 @@ import re
 
 ADMIN_ACCESS = 3  # Назначает права пользователям
 EDITOR_ACCESS = 2  # Редактирует вузы
-READER_ACCESS = 1
-GUEST_ACCESS = 0
+READER_ACCESS = 1  # Только зарегистрированный пользователь
+GUEST_ACCESS = 0  # Незарегистрированный пользователь
 
 MIN_PASSWORD_LENGTH = 8
 
