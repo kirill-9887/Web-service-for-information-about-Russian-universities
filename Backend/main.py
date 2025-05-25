@@ -4,6 +4,7 @@ import threading
 from sqlalchemy import desc, and_
 from fastapi import FastAPI, HTTPException, Query, status, Cookie, Body
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from mako.lookup import TemplateLookup
 from typing import Optional
 import auth
@@ -24,6 +25,15 @@ RESOURCES_WHITE_LIST = None
 
 def get_username_from_session_model(session_model: auth.SessionData):
     return session_model.user.username if session_model else ""
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    details = ""
+    for error in exc.errors():
+        message = "".join(error["msg"].split(",")[1:]).strip()
+        details += f"{message}\n"
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=details)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -149,7 +159,7 @@ def post_edit_eduprogram(data: dm.EduProg,
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     except dbt.RecordNotFoundError:
         raise HTTPException(status_code=404, detail="Образовательная программа не найдена")
-    except dbt.NotUnivException:
+    except dbt.NotUnivError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Данные об образовательной программе не указывают на ее принадлежность к высшему образованию")
     except Exception as e:
@@ -293,7 +303,7 @@ def post_edit_university(mode: str,
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     except dbt.RecordNotFoundError:
         raise HTTPException(status_code=404, detail="Вуз не найден")
-    except dbt.NotUnivException:
+    except dbt.NotUnivError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Название организации не указывает на принадлежность к высшему образованию")
     except Exception as e:
         print(f"Ошибка при попытке обработать вуз: {e}")
@@ -347,28 +357,80 @@ def generate_session_token_response(session_id, session_token):
     return response
 
 
+def create_new_session(user_id: str):
+    session_token = auth.generate_session_token()
+    try:
+        session_id = dbt.Session.add(token_hash=auth.hash_password(session_token), user_id=user_id)
+    except Exception as e:
+        print("ERROR:", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Авторизация не удалась из-за внутренней ошибки сервера")
+    return generate_session_token_response(session_id, session_token)
+
+
+@app.post("/users/create", response_class=JSONResponse)
+def create_user(user_data: dm.UserInfoData = Body(),
+                session_data: Optional[str] = Cookie(None)):
+    """Создает запись о новом пользователе в БД. Пользователю потребуется завершить регистрацию"""
+    # session_model = auth.verify_session(session_data)
+    # if not session_model:
+    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    # if session_model.user.access_level < dm.ADMIN_ACCESS:
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    reset_token = auth.generate_reset_token()
+    try:
+        user_id = dbt.User.add(
+            **user_data.model_dump(),
+            password_hash=auth.hash_password(reset_token),
+            incomplete_registration=1,
+        ).id
+    except dbt.UniqueConstraintFailedError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Имя пользователя уже занято")
+    return {"url": f"{config.PREFIX}://{config.HOST}:{config.PORT}/users/finish-reg?user_id={user_id}&token={reset_token}"}
+
+
+@app.get("/users/finish-reg", response_class=HTMLResponse)
+def get_finish_registration(user_id: str, token: str):
+    """Возвращает страницу для завершения регистрации пользователя, если он создавался администратором"""
+    try:
+        auth.verify_reset_token(user_id=user_id, token=token)
+    except auth.WrongDataError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверная ссылка")
+    except auth.ExpirationTimeError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Время ссылки истекло")
+    template = lookup.get_template("Frontend/finish_reg.html")
+    html_content = template.render(user_id=user_id, token=token)
+    return HTMLResponse(content=html_content)
+
+
+@app.post("/users/finish-reg", response_class=JSONResponse)
+def post_finish_reg(user_id: str,
+                    token: str,
+                    data: dm.CreatePasswordData = Body()):
+    """Устанавливает пароль пользователя и производит авторизацию"""
+    try:
+        auth.verify_reset_token(user_id=user_id, token=token)
+    except auth.WrongDataError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверная ссылка")
+    except auth.ExpirationTimeError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Время ссылки истекло")
+    dbt.User.update_password_hash(id=user_id, password_hash=auth.hash_password(data.new_password))
+    return create_new_session(user_id=user_id)
+
+
 @app.post("/register", response_class=JSONResponse)
 def register_new_user(data: dm.UserRegData = Body()):
     """Регистрирует нового пользователя, сразу авторизуя его"""
     password = data.password
     password_hash = auth.hash_password(password)
     try:
-        user = dbt.User.add(dm.UserPersonalData(
-            username=data.username,
-            name=data.name,
-            surname=data.surname,
-            patronymic=data.patronymic),
-            password_hash=password_hash
+        user = dbt.User.add(
+            **data.model_dump(exclude={"password"}),
+            password_hash=password_hash,
         )
     except dbt.UniqueConstraintFailedError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Имя пользователя уже занято")
-    session_token = auth.generate_session_token()
-    try:
-        session_id = dbt.Session.add(token_hash=auth.hash_password(session_token), user_id=user.id)
-    except Exception as e:
-        print("ERROR:", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Вы зарегистрированы. Авторизация не удалась из-за внутренней ошибки сервера")
-    return generate_session_token_response(session_id, session_token)
+    return create_new_session(user_id=user.id)
 
 
 @app.delete("/delete-user")
@@ -387,13 +449,7 @@ def login(data: dm.LoginData = Body()):
     user = dbt.User.get_by_username(username=username)
     if not user or not auth.verify_password(user.password_hash, password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверное имя пользователя или пароль")
-    session_token = auth.generate_session_token()
-    try:
-        session_id = dbt.Session.add(token_hash=auth.hash_password(session_token), user_id=user.id)
-    except Exception as e:
-        print("ERROR:", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Авторизация не удалась из-за внутренней ошибки сервера")
-    return generate_session_token_response(session_id, session_token)
+    return create_new_session(user_id=user.id)
 
 
 @app.post("/logout", response_class=JSONResponse)
@@ -419,7 +475,7 @@ def logout_all(session_data: Optional[str] = Cookie(None)):
 
 
 @app.post("/change_personal_data", response_class=JSONResponse)
-def change_personal_data(data: dm.UserPersonalData,
+def change_personal_data(data: dm.UserOwnData,
                          session_data: Optional[str] = Cookie(None)):
     """Изменяет личные данные пользователя от самого пользователя"""
     session_model = auth.verify_session(session_data)
@@ -443,8 +499,6 @@ def change_password(data: dm.ChangePasswordData,
     session_model = auth.verify_session(session_data)
     if not session_model:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Вы не авторизованы")
-    if data.new_password != data.repeated_password:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Пароли не совпадают")
     user = dbt.User.get_by_id(session_model.user.id)
     if not auth.verify_password(user.password_hash, data.password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный пароль")
@@ -522,7 +576,5 @@ if __name__ == "__main__":
     RESOURCES_WHITE_LIST = get_all_relpaths(config.RESOURCES_RELATIVE_CATALOG)
     dbt.create_tables()
     import webbrowser
-    host="0.0.0.0"
-    port=8000
-    threading.Timer(2, lambda: webbrowser.open(f"http://{host}:{port}")).start()
-    uvicorn.run(app, host=host, port=port)
+    threading.Timer(2, lambda: webbrowser.open(f"http://{config.HOST}:{config.PORT}")).start()
+    uvicorn.run(app, host=config.HOST, port=config.PORT)

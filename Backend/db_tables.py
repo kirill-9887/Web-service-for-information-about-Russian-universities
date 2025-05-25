@@ -57,10 +57,12 @@ class User(Base):
     registrate_date = Column(TEXT, default=lambda: str(datetime.datetime.now(pytz.timezone('Europe/Moscow'))))
     password_hash = Column(TEXT, nullable=False)
     access_level = Column(Integer, default=dm.READER_ACCESS)
+    incomplete_registration = Column(Integer, default=False)
     sessions = relationship("Session", back_populates="user", cascade="all")
 
     @classmethod
     def get_by_id(cls, id: str) -> Type["User"] | None:
+        """Возвращает запись о пользователе по ее id"""
         db_session = create_db_session()
         try:
             user = db_session.query(User).get(id)
@@ -70,18 +72,20 @@ class User(Base):
 
     @classmethod
     def get_by_username(cls, username: str) -> Type["User"] | None:
+        """Возвращает запись о пользователе, завершившим регистрацию, по его username"""
         db_session = create_db_session()
         try:
-            user = db_session.query(User).filter_by(username=username).first()
+            user = db_session.query(User).filter(User.username == username,
+                                                 User.incomplete_registration == 0).first()
             return user
         finally:
             db_session.close()
 
     @classmethod
-    def add(cls, data: dm.UserPersonalData, password_hash: str) -> Type["User"]:
+    def add(cls, **data) -> Type["User"]:
         db_session = create_db_session()
         try:
-            user = User(**data.model_dump(), password_hash=password_hash)
+            user = User(**data)
             db_session.add(user)
             db_session.commit()
             return user
@@ -94,7 +98,7 @@ class User(Base):
             db_session.close()
 
     @classmethod
-    def update_personal_data(cls, id: str, personal_data: dm.UserPersonalData) -> None:
+    def update_personal_data(cls, id: str, personal_data: dm.UserOwnData) -> None:
         db_session = create_db_session()
         try:
             updated_row_count = db_session.query(User).filter_by(id=id).update({
@@ -118,7 +122,8 @@ class User(Base):
     def update_password_hash(cls, id: str, password_hash: str) -> None:
         db_session = create_db_session()
         try:
-            updated_row_count = db_session.query(User).filter_by(id=id).update({User.password_hash: password_hash})
+            updated_row_count = db_session.query(User).filter_by(id=id).update({User.password_hash: password_hash,
+                                                                                User.incomplete_registration: 0})
             if not updated_row_count:
                 raise RecordNotFoundError
             db_session.commit()
@@ -304,7 +309,7 @@ class University(Base):
             db_session.close()
 
 
-class NotUnivException(Exception):
+class NotUnivError(Exception):
     def __str__(self):
         return "Education organisation is not university"
 
@@ -312,12 +317,11 @@ class NotUnivException(Exception):
 @event.listens_for(University, 'before_insert')
 @event.listens_for(University, 'before_update')
 def university_before_listener(mapper, connection, target):
-    """Проверяет, является ли учебная организация филиалом, а также высшего образования ли она"""
     target.name_search = target.full_name.lower() + " " + target.short_name.lower()
     if target.head_edu_org_id == "":
         target.head_edu_org_id = None
     if "колледж" in str(target.full_name).lower() or not ("высшего" in str(target.full_name).lower() or "высшего" in str(target.type_name).lower()):
-        raise NotUnivException
+        raise NotUnivError
 
 
 class EduProg(Base):

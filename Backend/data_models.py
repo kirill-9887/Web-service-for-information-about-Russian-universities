@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, BeforeValidator
+from pydantic import BaseModel, Field, BeforeValidator, field_validator, model_validator
 import database
 from typing import Type
 
@@ -9,6 +9,8 @@ ADMIN_ACCESS = 3  # Назначает права пользователям
 EDITOR_ACCESS = 2  # Редактирует вузы
 READER_ACCESS = 1
 GUEST_ACCESS = 0
+
+MIN_PASSWORD_LENGTH = 8
 
 
 def base2model(base: Type[database.Base], model_class: Type[BaseModel], **kwargs):
@@ -53,19 +55,27 @@ class LoginData(BaseModel):
 
 class UserPersonalData(BaseModel):
     """Персональные данные пользователя"""
-    username: str = Field(min_length=1)
     name: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
     surname: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
     patronymic: str = Field(pattern="^$|^[a-zA-Zа-яА-Я]+$")
 
 
-class UserRegData(UserPersonalData):
-    """Данные, принимаемые сервером от клиента для регистрации нового пользователя"""
+class UserOwnData(UserPersonalData):
+    """Информация о пользователе, которую он указывает при регистрации"""
+    username: str = Field(min_length=1)
+
+
+class UserInfoData(UserOwnData):
+    access_level: int = Field(ge=READER_ACCESS, le=ADMIN_ACCESS)
+
+
+class UserRegData(UserOwnData):
+    """Данные для регистрации нового пользователя"""
     password: str = Field(min_length=8)  # pattern="^[a-zA-Z0-9_\-!@#$%^&*()]+$"
 
 
 class User(BaseModel):
-    """Модель User для чтения из базы данных"""
+    """Модель User базы данных"""
     id: str
     username: str
     name: str
@@ -76,11 +86,27 @@ class User(BaseModel):
     access_level: int
 
 
-class ChangePasswordData(BaseModel):
-    """Данные от клиента для смены пароля"""
-    password: str
+class CreatePasswordData(BaseModel):
+    """Данные для создания пароля"""
     new_password: str
     repeated_password: str
+
+    @field_validator("new_password")
+    def validate_new_password(cls, value):
+        if len(value) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f"Пароль не должен быть менее {MIN_PASSWORD_LENGTH} символов в длину")
+        return value
+
+    @model_validator(mode="after")
+    def passwords_must_match(cls, values):
+        if values.new_password != values.repeated_password:
+            raise ValueError("Пароли не совпадают")
+        return values
+
+
+class ChangePasswordData(CreatePasswordData):
+    """Данные для смены пароля"""
+    password: str
 
 
 class ChangeAccessData(BaseModel):

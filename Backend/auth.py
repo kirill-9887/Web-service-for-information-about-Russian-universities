@@ -8,7 +8,18 @@ import db_tables as dbt
 
 
 TOKEN_LENGTH = 32  # в байтах
+RESET_TOKEN_LENGTH = 32
+
 TOKEN_TIME = 24 * 60 * 60
+RESET_TOKEN_TIME = 24 * 60 * 60
+
+
+class WrongDataError(Exception):
+    pass
+
+
+class ExpirationTimeError(Exception):
+    pass
 
 
 class SessionData(pydantic.BaseModel):
@@ -19,6 +30,11 @@ class SessionData(pydantic.BaseModel):
 
 def generate_session_token(length=TOKEN_LENGTH):
     token = secrets.token_hex(length)
+    return token
+
+
+def generate_reset_token(length=RESET_TOKEN_LENGTH):
+    token = secrets.token_hex(length) + "-" + str(int(time.time()) + RESET_TOKEN_TIME)
     return token
 
 
@@ -58,3 +74,14 @@ def verify_session(session_data: str) -> SessionData | None:
         return SessionData(user=user, session_id=session_id, session_token=session_token)
     finally:
         db_session.close()
+
+
+def verify_reset_token(user_id: str, token: str) -> None:
+    """Верифицирует данные, необходимые для предоставления завершения регистрации пользователю"""
+    user = dbt.User.get_by_id(id=user_id)
+    if not user or not verify_password(user.password_hash, token):
+        raise WrongDataError
+    expiration_time = int(token.split("-")[1])
+    current_time = int(time.time())
+    if current_time > expiration_time:
+        raise ExpirationTimeError
