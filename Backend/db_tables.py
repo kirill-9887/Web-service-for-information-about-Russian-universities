@@ -7,34 +7,39 @@ import datetime
 import time
 import pytz
 from sqlalchemy.orm import relationship
-from typing import Type
+from typing import Optional
 import auth
 from database import Base, engine, create_db_session
 import data_models as dm
 
 
+class NotUnivError(Exception):
+    """The data does not apply to higher education"""
+    pass
+
+
 class RecordNotFoundError(Exception):
+    """Record not found in database"""
     pass
 
 
 class UniqueConstraintFailedError(Exception):
+    """The value of some field of the record is not unique"""
     pass
 
 
 class SelfCreatedIDError(Exception):
-    """
-    Означает, что произошла попытка вставить в таблицу запись с непустым полем id.
-    Используется, если база данных генерирует id автоматически.
-    """
+    """Attempt to insert a record into a table with a non-empty id field"""
     pass
 
 
 def provide_uuid() -> str:
-    """Генерирует UUID"""
+    """Generates UUID and returns it as a string"""
     return str(uuid.uuid4())
 
 
 def create_tables():
+    """Creates all declared tables"""
     Base.metadata.create_all(engine)
     refresh_tip_tables()
     print("Таблицы созданы")
@@ -47,7 +52,8 @@ def refresh_tip_tables():
 
 
 class User(Base):
-    """Таблица данных о зарегистрированных пользователях сервиса"""
+    """Registered users of the service"""
+
     __tablename__ = "users"
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(TEXT, nullable=False, unique=True)
@@ -61,8 +67,8 @@ class User(Base):
     sessions = relationship("Session", back_populates="user", cascade="all")
 
     @classmethod
-    def get_by_id(cls, id: str) -> Type["User"] | None:
-        """Возвращает запись о пользователе по ее id"""
+    def get_by_id(cls, id: str) -> Optional["User"]:
+        """Returns a user record by its id"""
         db_session = create_db_session()
         try:
             user = db_session.query(User).get(id)
@@ -71,18 +77,17 @@ class User(Base):
             db_session.close()
 
     @classmethod
-    def get_by_username(cls, username: str) -> Type["User"] | None:
-        """Возвращает запись о пользователе, завершившим регистрацию, по его username"""
+    def get_by_username(cls, username: str) -> Optional["User"]:
+        """Returns a record of a user who has completed registration, by their username"""
         db_session = create_db_session()
         try:
-            user = db_session.query(User).filter(User.username == username,
-                                                 User.incomplete_registration == 0).first()
+            user = db_session.query(User).filter_by(username=username, incomplete_registration=0).first()
             return user
         finally:
             db_session.close()
 
     @classmethod
-    def add(cls, **data) -> Type["User"]:
+    def add(cls, **data) -> "User":
         db_session = create_db_session()
         try:
             user = User(**data)
@@ -162,7 +167,8 @@ class User(Base):
 
 
 class Session(Base):
-    """Таблица данных о сессиях авторизованных пользователей (текущих и завершенных)"""
+    """Current or completed user authorization sessions"""
+
     __tablename__ = "sessions"
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     token_hash = Column(TEXT)
@@ -173,7 +179,7 @@ class Session(Base):
 
     @classmethod
     def add(cls, token_hash: str, user_id: str) -> str:
-        """Возвращает id добавленной сессии"""
+        """Returns the id of the added session"""
         db_session = create_db_session()
         try:
             session = Session(token_hash=token_hash, user_id=user_id)
@@ -188,13 +194,15 @@ class Session(Base):
 
     @classmethod
     def end(cls, user_id: str, include_id: str = None, exclude_id: str = None) -> int:
-        """Возвращает количество завершенных сессий"""
+        """Returns the number of ended sessions"""
         db_session = create_db_session()
         try:
-            updated_row_count = db_session.query(Session).filter(Session.user_id == user_id,
-                                                                 Session.id == include_id if include_id else True,
-                                                                 Session.id != exclude_id if exclude_id else True,
-                                                                 Session.is_active).update({Session.is_active: 0})
+            updated_row_count = db_session.query(Session).filter(
+                Session.user_id == user_id,
+                not include_id or Session.id == include_id,
+                not exclude_id or Session.id != exclude_id,
+                Session.is_active).update({Session.is_active: 0},
+            )
             db_session.commit()
             return updated_row_count
         except Exception as e:
@@ -206,10 +214,12 @@ class Session(Base):
 
 class University(Base):
     """
-    Таблица данных об университетах из реестра
-    custom=True, если запись создана пользователем, иначе данные из реестра
-    deleted=True, если запись получена из реестра, но удалена пользователем, тогда она не восстановится при обновлении данных
+    Universities with state accreditation.
+    custom=True, if entry was created by user, False if data is got from the registry.
+    deleted=True, if data is got from the registry but deleted by user,
+    then it will not be restored when data is updated.
     """
+
     __tablename__ = "universities"
     id = Column(String, primary_key=True)
     full_name = Column(TEXT)
@@ -234,12 +244,13 @@ class University(Base):
     custom = Column(Integer, default=0)
     deleted = Column(Integer, default=0)
     head_edu_org = relationship("University", back_populates="branches", remote_side=[id])
-    branches = relationship("University", back_populates="head_edu_org")
-    eduprogs = relationship("EduProg", back_populates="university")
+    branches = relationship("University", back_populates="head_edu_org", cascade="all")
+    eduprogs = relationship("EduProg", back_populates="university", cascade="all")
     name_search = Column(TEXT)
 
     @classmethod
-    def get_by_id(cls, id: str) -> Type["University"] | None:
+    def get_by_id(cls, id: str) -> Optional["University"]:
+        """Returns None, even if the record exists but is marked as deleted"""
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
@@ -250,7 +261,10 @@ class University(Base):
             db_session.close()
 
     @classmethod
-    def add(cls, data: dm.University, custom: bool):
+    def add(cls, data: dm.University, custom: bool) -> "University":
+        """
+        :param custom: True if the data is not from the registry.
+        """
         db_session = create_db_session()
         try:
             univ = University(**data.model_dump(), custom=custom)
@@ -270,7 +284,7 @@ class University(Base):
             db_session.close()
 
     @classmethod
-    def update(cls, data: dm.University) -> Type["University"]:
+    def update(cls, data: dm.University) -> "University":
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(data.id)
@@ -288,6 +302,9 @@ class University(Base):
 
     @classmethod
     def delete(cls, id: str, from_parser: bool) -> None:
+        """
+        :param from_parser: True if the university is no already in the registry.
+        """
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
@@ -299,6 +316,8 @@ class University(Base):
                 db_session.delete(univ)
             elif not univ.custom and not from_parser:
                 univ.deleted = 1
+                for branch in univ.branches:
+                    branch.deleted = 1
                 for eduprog in univ.eduprogs:
                     eduprog.deleted = 1
             db_session.commit()
@@ -309,27 +328,26 @@ class University(Base):
             db_session.close()
 
 
-class NotUnivError(Exception):
-    def __str__(self):
-        return "Education organisation is not university"
-
-
 @event.listens_for(University, 'before_insert')
 @event.listens_for(University, 'before_update')
 def university_before_listener(mapper, connection, target):
     target.name_search = target.full_name.lower() + " " + target.short_name.lower()
     if target.head_edu_org_id == "":
         target.head_edu_org_id = None
-    if "колледж" in str(target.full_name).lower() or not ("высшего" in str(target.full_name).lower() or "высшего" in str(target.type_name).lower()):
+    if ("общеобр" in target.full_name.lower()
+            or "колледж" in target.full_name.lower()
+            or not ("высшего" in target.full_name.lower() or "высшего" in target.type_name.lower())):
         raise NotUnivError
 
 
 class EduProg(Base):
     """
-    Таблица данных об образовательных программах из реестра
-    custom=True, если запись создана пользователем, иначе данные из реестра
-    deleted=True, если запись получена из реестра, но удалена пользователем, тогда она не восстановится при обновлении данных
+    Educational programs.
+    custom=True, if entry was created by user, False if data is got from the registry.
+    deleted=True, if data is got from the registry but deleted by user,
+    then it will not be restored when data is updated.
     """
+
     __tablename__ = "educational_programs"
     id = Column(String, primary_key=True)
     type_name = Column(TEXT)
@@ -349,7 +367,8 @@ class EduProg(Base):
     university = relationship("University", back_populates="eduprogs")
 
     @classmethod
-    def get_by_id(cls, id: str) -> Type["EduProg"] | None:
+    def get_by_id(cls, id: str) -> Optional["EduProg"]:
+        """Returns None, even if the record exists but is marked as deleted"""
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(id)
@@ -361,6 +380,9 @@ class EduProg(Base):
 
     @classmethod
     def add(cls, data: dm.EduProg, custom: bool):
+        """
+        :param custom: True if the data is not from the registry.
+        """
         db_session = create_db_session()
         try:
             eduprog = EduProg(**data.model_dump(), custom=custom)
@@ -380,7 +402,7 @@ class EduProg(Base):
             db_session.close()
 
     @classmethod
-    def update(cls, data: dm.EduProg) -> Type["EduProg"]:
+    def update(cls, data: dm.EduProg) -> "EduProg":
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(data.id)
@@ -398,6 +420,9 @@ class EduProg(Base):
 
     @classmethod
     def delete(cls, id: str, from_parser: bool) -> None:
+        """
+        :param from_parser: True if the educational program is no already in the registry.
+        """
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(id)
