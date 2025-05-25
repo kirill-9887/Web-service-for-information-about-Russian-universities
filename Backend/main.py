@@ -30,6 +30,7 @@ def get_username_from_session_model(session_model: auth.SessionData):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     details = ""
+    print(exc.errors)
     for error in exc.errors():
         message = "".join(error["msg"].split(",")[1:]).strip()
         details += f"{message}\n"
@@ -421,11 +422,11 @@ def post_finish_reg(user_id: str,
 @app.post("/register", response_class=JSONResponse)
 def register_new_user(data: dm.UserRegData = Body()):
     """Регистрирует нового пользователя, сразу авторизуя его"""
-    password = data.password
+    password = data.new_password
     password_hash = auth.hash_password(password)
     try:
         user = dbt.User.add(
-            **data.model_dump(exclude={"password"}),
+            **data.model_dump(exclude={"new_password", "repeated_password"}),
             password_hash=password_hash,
         )
     except dbt.UniqueConstraintFailedError:

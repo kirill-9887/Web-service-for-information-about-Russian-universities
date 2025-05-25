@@ -3,6 +3,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field, BeforeValidator, field_validator, model_validator
 import database
 from typing import Type
+import re
 
 
 ADMIN_ACCESS = 3  # Назначает права пользователям
@@ -49,29 +50,60 @@ class UserOverviewData(BaseModel):
 
 class LoginData(BaseModel):
     """Данные для авторизации"""
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    username: str
+    password: str
+
+    @field_validator("username", "password")
+    def validate_data(cls, value):
+        if len(value) == 0:
+            raise ValueError(f"Поле не может быть пустым")
+        return value
 
 
 class UserPersonalData(BaseModel):
     """Персональные данные пользователя"""
-    name: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
-    surname: str = Field(pattern="^[a-zA-Zа-яА-Я]+$")
-    patronymic: str = Field(pattern="^$|^[a-zA-Zа-яА-Я]+$")
+    name: str
+    surname: str
+    patronymic: str
+
+    @field_validator("name")
+    def validate_name(cls, value):
+        if not re.fullmatch(pattern="^[a-zA-Zа-яА-Я]+$", string=value):
+            raise ValueError("Имя должно содержать только латинские или русские буквы")
+        return value
+
+    @field_validator("surname")
+    def validate_surname(cls, value):
+        if not re.fullmatch(pattern="^[a-zA-Zа-яА-Я]+$", string=value):
+            raise ValueError("Фамилия должна содержать только латинские или русские буквы")
+        return value
+
+    @field_validator("patronymic")
+    def validate_patronymic(cls, value):
+        if not re.fullmatch(pattern="^$|^[a-zA-Zа-яА-Я]+$", string=value):
+            raise ValueError("Отчество должно содержать только латинские или русские буквы")
+        return value
 
 
 class UserOwnData(UserPersonalData):
     """Информация о пользователе, которую он указывает при регистрации"""
-    username: str = Field(min_length=1)
+    username: str
+
+    @field_validator("username")
+    def validate_username(cls, value):
+        if not re.fullmatch(pattern="^[a-zA-Z][a-zA-Z0-9]*$", string=value):
+            raise ValueError("Username должен содержать только латинские буквы и цифры и начинаться с буквы")
+        return value
 
 
 class UserInfoData(UserOwnData):
-    access_level: int = Field(ge=READER_ACCESS, le=ADMIN_ACCESS)
+    access_level: int
 
-
-class UserRegData(UserOwnData):
-    """Данные для регистрации нового пользователя"""
-    password: str = Field(min_length=8)  # pattern="^[a-zA-Z0-9_\-!@#$%^&*()]+$"
+    @field_validator("access_level")
+    def validate_access_level(cls, value):
+        if not (READER_ACCESS <= value <= ADMIN_ACCESS):
+            raise ValueError(f"Значение уровня доступа должно лежать в диапазоне от {READER_ACCESS} до {ADMIN_ACCESS}")
+        return value
 
 
 class User(BaseModel):
@@ -93,6 +125,9 @@ class CreatePasswordData(BaseModel):
 
     @field_validator("new_password")
     def validate_new_password(cls, value):
+        if not re.fullmatch(pattern=r"^[a-zA-Z0-9_\-+=!;:?.,@#$%^&*()№{}]+$", string=value):
+            raise ValueError("Пароль может содержать только строчные и прописные латинские буквы, цифры, знаки "
+                              "препинания и некоторые специальные символы")
         if len(value) < MIN_PASSWORD_LENGTH:
             raise ValueError(f"Пароль не должен быть менее {MIN_PASSWORD_LENGTH} символов в длину")
         return value
@@ -109,10 +144,21 @@ class ChangePasswordData(CreatePasswordData):
     password: str
 
 
+class UserRegData(UserOwnData, CreatePasswordData):
+    """Данные для регистрации нового пользователя"""
+    pass
+
+
 class ChangeAccessData(BaseModel):
     """Данные от клиента для изменения уровня доступа пользователя к сервису"""
     username: str
     new_access_level: int
+
+    @field_validator("new_access_level")
+    def validate_new_access_level(cls, value):
+        if not (READER_ACCESS <= value <= ADMIN_ACCESS):
+            raise ValueError(f"Значение уровня доступа должно лежать в диапазоне от {READER_ACCESS} до {ADMIN_ACCESS}")
+        return value
 
 
 def none2str(value: Any) -> str:
