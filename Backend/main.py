@@ -372,11 +372,11 @@ def create_new_session(user_id: str):
 def create_user(user_data: dm.UserInfoData = Body(),
                 session_data: Optional[str] = Cookie(None)):
     """Создает запись о новом пользователе в БД. Пользователю потребуется завершить регистрацию"""
-    # session_model = auth.verify_session(session_data)
-    # if not session_model:
-    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    # if session_model.user.access_level < dm.ADMIN_ACCESS:
-    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    session_model = auth.verify_session(session_data)
+    if not session_model:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if session_model.user.access_level < dm.ADMIN_ACCESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     reset_token = auth.generate_reset_token()
     try:
         user_id = dbt.User.add(
