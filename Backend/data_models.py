@@ -1,7 +1,5 @@
 from typing import Annotated, Any
-
-from pydantic import BaseModel, Field, BeforeValidator, field_validator, model_validator
-import database
+from pydantic import BaseModel, BeforeValidator, field_validator, model_validator
 from typing import Type
 import re
 
@@ -14,7 +12,7 @@ GUEST_ACCESS = 0  # Незарегистрированный пользоват�
 MIN_PASSWORD_LENGTH = 8
 
 
-def base2model(base: Type[database.Base], model_class: Type[BaseModel], **kwargs):
+def base2model(base, model_class: Type[BaseModel], **kwargs):
     """
     Конвертирует объект класса sqlalchemy записи таблицы базы данных в pydantic-модель
     base: объект записи из базы данных

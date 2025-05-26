@@ -1,9 +1,13 @@
+import asyncio
 import time
 import secrets
 import argon2
 import pydantic
 from typing import Any
-from database import create_db_session
+
+from sqlalchemy import select
+
+from database import asyncDBSession
 import db_tables as dbt
 
 
@@ -53,14 +57,15 @@ def verify_password(password_hash, password) -> bool:
         return False
 
 
-def verify_session(session_data: str) -> SessionData | None:
+async def verify_session(session_data: str) -> SessionData | None:
     """Возвращает объект User, id сессии и сессионный токен, если сессия действительна, иначе None"""
     if not session_data:
         return None
     session_id, session_token = session_data.split("&")
-    db_session = create_db_session()
-    try:
-        session = db_session.query(dbt.Session).get(session_id)
+    async with asyncDBSession() as db_session:
+        stmt = select(dbt.Session).where(dbt.Session.id == session_id)
+        result = await db_session.execute(stmt)
+        session = result.scalars().first()
         if not session or session.is_active == 0:
             return None
         if not verify_password(session.token_hash, session_token):
@@ -70,15 +75,13 @@ def verify_session(session_data: str) -> SessionData | None:
             session.is_active = 0
             db_session.commit()
             return None
-        user = dbt.User.get_by_id(session.user_id)
+        user = await dbt.User.get_by_id(session.user_id)
         return SessionData(user=user, session_id=session_id, session_token=session_token)
-    finally:
-        db_session.close()
 
 
-def verify_reset_token(user_id: str, token: str) -> None:
+async def verify_reset_token(user_id: str, token: str) -> None:
     """Верифицирует данные, необходимые для предоставления завершения регистрации пользователю"""
-    user = dbt.User.get_by_id(id=user_id)
+    user = await dbt.User.get_by_id(id=user_id)
     if not user or not verify_password(user.password_hash, token):
         raise WrongDataError
     expiration_time = int(token.split("-")[1])
