@@ -308,9 +308,7 @@ class University(Base):
         db_session = create_db_session()
         try:
             univ = db_session.query(University).get(id)
-            if not univ:
-                raise RecordNotFoundError
-            if univ.custom and from_parser:
+            if not univ or univ.custom and from_parser:
                 return
             elif univ.custom and not from_parser or not univ.custom and from_parser:
                 db_session.delete(univ)
@@ -426,9 +424,7 @@ class EduProg(Base):
         db_session = create_db_session()
         try:
             eduprog = db_session.query(EduProg).get(id)
-            if not eduprog:
-                raise RecordNotFoundError
-            if eduprog.custom and from_parser:
+            if not eduprog or eduprog.custom and from_parser:
                 return
             elif eduprog.custom and not from_parser or not eduprog.custom and from_parser:
                 db_session.delete(eduprog)
