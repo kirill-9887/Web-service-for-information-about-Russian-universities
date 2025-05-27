@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Формы авторизации</title>
+    <link rel="stylesheet" href="styles.css"> <!-- Подключение стилей -->
+</head>
+<body>
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h2>Вход</h2>
+            <input type="text" id="loginUsername" placeholder="Логин">
+            <input type="password" id="loginPassword" placeholder="Пароль">
+            <button onclick="login()">Войти</button>
+            <button class="close-btn" onclick="closeModal('loginModal')">Закрыть</button>
+        </div>
+    </div>
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <h2>Регистрация</h2>
+            <input type="text" id="registerUsername" placeholder="Логин">
+            <input type="password" id="registerPassword" placeholder="Пароль">
+            <button onclick="register()">Зарегистрироваться</button>
+            <button class="close-btn" onclick="closeModal('registerModal')">Закрыть</button>
+        </div>
+    </div>
+    <!-- Дополнительный JavaScript, если есть -->
+    <script src="auth.js"></script>
+</body>
+</html>
