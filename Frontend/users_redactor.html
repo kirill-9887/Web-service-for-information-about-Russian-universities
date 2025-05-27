@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель: назначение прав пользователям</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="video-background">
+        <video id="background-video" autoplay loop muted>
+            <source src="video/background.mp4" type="video/mp4">
+        </video>
+    </div>
+
+    <header>
+        <h1 class="header-title">Админ-панель: назначение прав пользователям</h1>
+    </header>
+
+    <div class="container admin-container">
+        <div class="admin-section">
+            <h2>Создать нового пользователя</h2>
+            <div class="create-user-form">
+                <input type="text" id="createUsername" placeholder="Username" required>
+                <input type="text" id="createName" placeholder="Имя" required>
+                <input type="text" id="createSurname" placeholder="Фамилия" required>
+                <input type="text" id="createPatronymic" placeholder="Отчество">
+                <input type="password" id="createPassword" placeholder="Пароль" required>
+                <select id="createRole" required>
+                    <option value="" disabled selected>Выберите уровень доступа</option>
+                    <option value="reader">Читатель</option>
+                    <option value="editor">Редактор</option>
+                    <option value="admin">Админ</option>
+                </select>
+                <button onclick="createUser()">Создать</button>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>Зарегистрированные пользователи</h2>
+            <div class="filter-group">
+                <select onchange="updateUserRole(this)">
+                    <option value="reader">Читатель</option>
+                    <option value="editor">Редактор</option>
+                    <option value="admin">Админ</option>
+                </select>
+                <button onclick="applyRole()">Назначить</button>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Имя</th>
+                            <th>Фамилия</th>
+                            <th>Отчество</th>
+                            <th>Дата регистрации</th>
+                            <th>Уровень доступа</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        % for user in users:
+                        <tr>
+                            <td>${user.username}</td>
+                            <td>${user.name}</td>
+                            <td>${user.surname}</td>
+                            <td>${user.patronymic or ''}</td>
+                            <td>${user.registration_date}</td>
+                            <td>${user.role}</td>
+                            <td>
+                                <button class="edit-btn" onclick="editUser('${user.username}')">Редактировать</button>
+                                <button class="delete-btn" onclick="deleteUser('${user.username}')">Удалить</button>
+                            </td>
+                        </tr>
+                        % endfor
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <button>Назад</button>
+                    <span>Страница 1</span>
+                    <button>Вперед</button>
+                </div>
+            </div>
+        </div>
+
+        <a href="profile.html" class="back-btn">Назад</a>
+    </div>
+
+    <!-- Модальное окно для отображения пароля -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <h2>Пароль нового пользователя</h2>
+            <p>Сгенерированный пароль:</p>
+            <input type="text" id="generatedPassword" readonly>
+            <button onclick="copyPassword()">Копировать</button>
+            <button onclick="closeModal('passwordModal')">Закрыть</button>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2025 Реестр образовательных организаций. Все права защищены.</p>
+        <p><a href="/contacts">Контакты</a> | <a href="/privacy">Политика конфиденциальности</a></p>
+    </footer>
+
+    <script src="auth.js"></script>
+</body>
+</html>
