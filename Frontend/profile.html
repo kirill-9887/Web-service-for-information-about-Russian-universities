@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Профиль</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .profile-container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 30px;
+            background: rgba(var(--card-bg-r sample_r), 0.97);
+            border-radius: 15px;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(10px);
+        }
+        .profile-field {
+            background: rgba(240, 240, 240, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .profile-field label {
+            display: block;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .profile-field input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            background: #e9ecef;
+            color: #555;
+        }
+        .nav-buttons button {
+            padding: 12px 25px;
+            margin: 5px;
+            font-size: 1em;
+            background: linear-gradient(90deg, #1a73e8, #1557b0);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .nav-buttons button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(26, 115, 232, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- Панель авторизации -->
+    % include 'auth_bar.html'
+
+    <div class="profile-container">
+        <h1>Профиль</h1>
+
+        <div class="profile-info">
+            <div class="profile-field">
+                <label>Username:</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="profile-field">
+                <label>Фамилия:</label>
+                <input type="text" id="surname" readonly>
+            </div>
+            <div class="profile-field">
+                <label>Имя:</label>
+                <input type="text" id="name" readonly>
+            </div>
+            <div class="profile-field">
+                <label>Отчество:</label>
+                <input type="text" id="patronymic" readonly>
+            </div>
+            <div class="profile-field">
+                <label>Дата регистрации:</label>
+                <input type="text" id="registration_date" readonly>
+            </div>
+            <div class="profile-field">
+                <label>Роль:</label>
+                <input type="text" id="role" readonly>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button onclick="window.location='/edit'">Изменить данные</button>
+            <button onclick="window.location='/change-password'">Сменить пароль</button>
+            <button id="admin-panel-btn" style="display: none;" onclick="window.location='/admin-panel'">Админ-панель</button>
+        </div>
+    </div>
+
+    
+    % include 'auth_forms.html'
+
+    <script src="auth.js"></script>
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const userData = JSON.parse(localStorage.getItem('userData')) || {};
+            
+            // Populate fields
+            document.getElementById('username').value = userData.username || '';
+            document.getElementById('surname').value = userData.surname || '';
+            document.getElementById('name').value = userData.name || '';
+            document.getElementById('patronymic').value = userData.patronymic || '';
+            document.getElementById('registration_date').value = userData.registration_date || '';
+            document.getElementById('role').value = userData.role || 'user';
+
+            
+            if (userData.role === 'admin') {
+                document.getElementById('admin-panel-btn').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

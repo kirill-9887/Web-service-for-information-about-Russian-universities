@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Обратная связь</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Обратная связь</h1>
+        <input type="text" id="name" placeholder="Ваше имя">
+        <input type="email" id="email" placeholder="Ваш email">
+        <textarea id="message" placeholder="Ваше сообщение"></textarea>
+        <button onclick="submitFeedback()">Отправить</button>
+        <div class="cta">
+            <a href="home.html">На главную</a>
+            <a href="index.html">Реестр</a>
+            <a href="map.html">Карта</a>
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        function submitFeedback() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const message = document.getElementById('message').value;
+            if (name && email && message) {
+                showToast('Сообщение отправлено');
+                document.getElementById('name').value = '';
+                document.getElementById('email').value = '';
+                document.getElementById('message').value = '';
+            } else {
+                showToast('Заполните все поля');
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+    </script>
+    <script src="video-background.js"></script>
+    <script src="theme.js"></script>
+</body>
+</html>
