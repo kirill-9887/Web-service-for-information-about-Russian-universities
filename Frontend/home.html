@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Главная страница</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Дополнительные стили для кнопок */
+        .main-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 40px 0;
+        }
+        .main-buttons a {
+            padding: 15px 30px;
+            background: linear-gradient(90deg, var(--primary-color), #1557b0);
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(26, 184, 232, 0.3);
+            transition: all 0.3s;
+        }
+        .main-buttons a:hover {
+            background: linear-gradient(90deg, #1599b0, var(--primary-color));
+            transform: translateY(-5px) scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="video-background">
+        <video id="background-video" autoplay muted loop>
+            <source src="path/to/your/video.mp4" type="video/mp4">
+        </video>
+    </div>
+    
+    <header>
+        <div class="container">
+            <h1 class="header-title">Добро пожаловать в реестр образовательных организаций</h1>
+            <p>Найдите свой вуз и узнайте больше о возможностях обучения</p>
+            <span id="userInfo" class="user-info"></span>
+        </div>
+    </header>
+
+    <!-- Панель авторизации -->
+    <div class="auth-bar" style="position: absolute; top: 20px; right: 20px;">
+        <a href="/auth_bar.html" class="auth-button">Вход</a>
+        <a href="/auth_forms.html" class="auth-button">Форма</a>
+    </div>
+
+    <div class="container search-container">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Поиск вуза...">
+            <button onclick="search()">Поиск</button>
+            <div class="suggestions" id="suggestions"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="cta main-buttons">
+            <a href="profile.html">Профиль</a>
+            <a href="eduprograms.html">Образовательные программы</a>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2025 Реестр образовательных организаций. Все права защищены.</p>
+        <p><a href="#">Контакты</a> | <a href="#">Политика конфиденциальности</a></p>
+    </footer>
+
+    <script>
+        let auth_username = "${auth_username}";
+
+        const universities = JSON.parse(localStorage.getItem('universities')) || [];
+
+        function search() {
+            const query = document.getElementById('searchInput').value;
+            window.location.href = `/universities?search=${query}`;
+        }
+
+        document.getElementById('searchInput').addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            const suggestions = document.getElementById('suggestions');
+            suggestions.innerHTML = '';
+            if (query) {
+                const matches = universities.filter(uni => uni.name.toLowerCase().includes(query));
+                matches.forEach(uni => {
+                    const div = document.createElement('div');
+                    div.textContent = uni.name;
+                    div.onclick = () => window.location.href = `university.html?id=${uni.id}`;
+                    suggestions.appendChild(div);
+                });
+                suggestions.style.display = matches.length ? 'block' : 'none';
+            } else {
+                suggestions.style.display = 'none';
+            }
+        });
+
+        window.onload = function() {
+            setInterval(() => {
+                console.log('Attempting to update news at', new Date().toLocaleString());
+            }, 300000);
+        };
+    </script>
+    <script src="/video-background.js"></script>
+    <script src="/auth.js"></script>
+</body>
+</html>
