@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Информация о вузе</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/styles.css">
     <style>
         .info-section {
             margin: 25px 0;
@@ -92,7 +92,7 @@
 <body>
     <header>
         <div class="container">
-            <h1 id="uniName">${univ.short_name}</h1>
+            <h1 id="uniName">${univ.short_name if univ.short_name else univ.full_name}</h1>
             <button class="theme-toggle" onclick="toggleTheme()">Сменить тему</button>
             <span id="userInfo" class="user-info"></span>
         </div>
@@ -101,12 +101,12 @@
 
     <div class="container">
         <div class="info-section">
-            
+
             <div class="info-item">
                 <span class="info-label">Полное наименование:</span>
                 <span class="info-value">${univ.full_name}</span>
             </div>
-            
+
             <div class="info-item">
                 <span class="info-label">Сокращенное наименование:</span>
                 <span class="info-value">${univ.short_name}</span>
@@ -127,6 +127,11 @@
             % endif
 
             <div class="info-item">
+                <span class="info-label">Федеральный округ:</span>
+                <span class="info-value">${univ.federal_district_name}</span>
+            </div>
+
+            <div class="info-item">
                 <span class="info-label">Субъект РФ:</span>
                 <span class="info-value">${univ.region_name}</span>
             </div>
@@ -144,7 +149,7 @@
                     <div>Факс: ${univ.fax}</div>
                     % endif
                     <div>Email: <a href="mailto:${univ.email}">${univ.email}</a></div>
-                    <div>Сайт: <a href="${univ.web_site}" target="_blank">${univ.web_site}</a></div>
+                    <div>Сайт: <a href="//${univ.web_site}" target="_blank">${univ.web_site}</a></div>
                 </div>
             </div>
 
@@ -172,7 +177,6 @@
                 <div class="info-value">
                     <div>ОПФ: ${univ.form_name}</div>
                     <div>Тип: ${univ.type_name}</div>
-                    <div>Федеральный округ: ${univ.federal_district_name}</div>
                 </div>
             </div>
 
@@ -192,16 +196,16 @@
             <button class="primary-btn" onclick="window.location.href='/eduprograms?univ_id=${univ.id}'">
                 Образовательные программы
             </button>
-            
+
             % if can_edit:
             <button class="edit-btn" onclick="window.location.href='/universities/edit/${univ.id}'">
                 Редактировать
             </button>
-            
+
             <button class="add-btn" onclick="window.location.href='/eduprograms/new/${univ.id}'">
                 + Новая ОП
             </button>
-            
+
             % if not univ.is_branch:
             <button class="add-btn" onclick="window.location.href='/universities/edit/new?branch_from=${univ.id}'">
                 + Добавить филиал
@@ -211,7 +215,7 @@
         </div>
 
         <div class="stats">
-            Просмотров: <span id="viewCount">${univ.views_count}</span>
+            Просмотров: <span id="viewCount">0</span>
         </div>
 
         <div class="social-buttons">
@@ -237,40 +241,33 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        
+
         function initTheme() {
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
         }
 
-        
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-        }
-
-        
         function share(platform) {
             const url = encodeURIComponent(window.location.href);
             const title = encodeURIComponent('Информация о вузе: ' + document.title);
-            
+
             const shareUrls = {
-                vk: `https://vk.com/share.php?url=${url}&title=${title}`,
-                telegram: `https://t.me/share/url?url=${url}&text=${title}`,
-                whatsapp: `https://wa.me/?text=${title}%0A${url}`
+                vk: `https://vk.com/share.php?url=${'${url}'}&title=${'${title}'}`,
+                telegram: `https://t.me/share/url?url=${'${url}'}&text=${'${title}'}`,
+                whatsapp: `https://wa.me/?text=${'${title}'}%0A${'${url}'}`
             };
 
             window.open(shareUrls[platform], '_blank');
         }
 
-        
+
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
-            
+
         });
     </script>
+    <script src="/video-background.js"></script>
+    <script src="/theme.js"></script>
     <script src="/auth.js"></script>
 </body>
 </html>

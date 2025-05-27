@@ -9,7 +9,7 @@
 <body>
     <div class="video-background">
         <video id="background-video" autoplay muted loop>
-            <source src="path/to/your/video.mp4" type="video/mp4">
+            <source src="background-video.mp4" type="video/mp4">
         </video>
     </div>
     <header>
@@ -19,7 +19,7 @@
             <button class="theme-toggle" onclick="toggleTheme()">Сменить тему</button>
             <span id="userInfo" class="user-info"></span>
         </div>
-        <a href="/auth_bar.html">Авторизация</a>
+        <%include file="auth_bar.html"/>
     </header>
 
     <div class="container">
@@ -76,7 +76,7 @@
         </div>
     </div>
 
-    <a href="/auth_forms.html">Форма регистрации</a>
+    <%include file="auth_forms.html"/>
 
     <footer>
         <p>© 2025 Реестр образовательных организаций. Все права защищены.</p>

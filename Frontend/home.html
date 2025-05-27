@@ -32,23 +32,22 @@
 <body>
     <div class="video-background">
         <video id="background-video" autoplay muted loop>
-            <source src="path/to/your/video.mp4" type="video/mp4">
+            <source src="/background-video.mp4" type="video/mp4">
         </video>
     </div>
-    
+
     <header>
         <div class="container">
             <h1 class="header-title">Добро пожаловать в реестр образовательных организаций</h1>
             <p>Найдите свой вуз и узнайте больше о возможностях обучения</p>
             <span id="userInfo" class="user-info"></span>
         </div>
+
+        <!-- Панель авторизации -->
+        <%include file="auth_bar.html"/>
+        <%include file="auth_forms.html"/>
     </header>
 
-    <!-- Панель авторизации -->
-    <div class="auth-bar" style="position: absolute; top: 20px; right: 20px;">
-        <a href="/auth_bar.html" class="auth-button">Вход</a>
-        <a href="/auth_forms.html" class="auth-button">Форма</a>
-    </div>
 
     <div class="container search-container">
         <div class="search-bar">
@@ -60,8 +59,8 @@
 
     <div class="container">
         <div class="cta main-buttons">
-            <a href="profile.html">Профиль</a>
-            <a href="eduprograms.html">Образовательные программы</a>
+            <a href="/universities">Университеты</a>
+            <a href="/eduprograms">Образовательные программы</a>
         </div>
     </div>
 
@@ -77,7 +76,7 @@
 
         function search() {
             const query = document.getElementById('searchInput').value;
-            window.location.href = `/universities?search=${query}`;
+            window.location.href = `/universities?search=${'${query}'}`;
         }
 
         document.getElementById('searchInput').addEventListener('input', function() {
@@ -89,7 +88,7 @@
                 matches.forEach(uni => {
                     const div = document.createElement('div');
                     div.textContent = uni.name;
-                    div.onclick = () => window.location.href = `university.html?id=${uni.id}`;
+                    div.onclick = () => window.location.href = `university.html?id=${'${uni.id}'}`;
                     suggestions.appendChild(div);
                 });
                 suggestions.style.display = matches.length ? 'block' : 'none';
@@ -105,6 +104,5 @@
         };
     </script>
     <script src="/video-background.js"></script>
-    <script src="/auth.js"></script>
 </body>
 </html>

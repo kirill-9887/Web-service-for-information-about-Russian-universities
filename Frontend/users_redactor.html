@@ -9,7 +9,7 @@
 <body>
     <div class="video-background">
         <video id="background-video" autoplay loop muted>
-            <source src="video/background.mp4" type="video/mp4">
+            <source src="background-video.mp4" type="video/mp4">
         </video>
     </div>
 
@@ -25,12 +25,11 @@
                 <input type="text" id="createName" placeholder="Имя" required>
                 <input type="text" id="createSurname" placeholder="Фамилия" required>
                 <input type="text" id="createPatronymic" placeholder="Отчество">
-                <input type="password" id="createPassword" placeholder="Пароль" required>
                 <select id="createRole" required>
                     <option value="" disabled selected>Выберите уровень доступа</option>
-                    <option value="reader">Читатель</option>
-                    <option value="editor">Редактор</option>
-                    <option value="admin">Админ</option>
+                    <option value="${access_lvls['reader']}">Читатель</option>
+                    <option value="${access_lvls['editor']}">Редактор</option>
+                    <option value="${access_lvls['admin']}">Админ</option>
                 </select>
                 <button onclick="createUser()">Создать</button>
             </div>
@@ -38,14 +37,11 @@
 
         <div class="admin-section">
             <h2>Зарегистрированные пользователи</h2>
-            <div class="filter-group">
-                <select onchange="updateUserRole(this)">
-                    <option value="reader">Читатель</option>
-                    <option value="editor">Редактор</option>
-                    <option value="admin">Админ</option>
-                </select>
-                <button onclick="applyRole()">Назначить</button>
-            </div>
+            <select id="access-selector">
+                <option value="${access_lvls['reader']}">Читатель</option>
+                <option value="${access_lvls['editor']}">Редактор</option>
+                <option value="${access_lvls['admin']}">Администратор</option>
+            </select>
 
             <div class="table-container">
                 <table>
@@ -57,6 +53,7 @@
                             <th>Отчество</th>
                             <th>Дата регистрации</th>
                             <th>Уровень доступа</th>
+                            <th>Завершил регистрацию</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -66,11 +63,12 @@
                             <td>${user.username}</td>
                             <td>${user.name}</td>
                             <td>${user.surname}</td>
-                            <td>${user.patronymic or ''}</td>
-                            <td>${user.registration_date}</td>
-                            <td>${user.role}</td>
+                            <td>${user.patronymic}</td>
+                            <td>${user.registrate_date}</td>
+                            <td>${[None, 'Читатель', 'Редактор', 'Администратор'][int(user.access_level)]}</td>
+                            <td>${['Да', 'Нет'][int(user.incomplete_registration)]}</td>
                             <td>
-                                <button class="edit-btn" onclick="editUser('${user.username}')">Редактировать</button>
+                                <button class="apply-role-btn" onclick="applyRole('${user.username}', document.getElementById('access-selector').value)">Назначить выбранную роль</button>
                                 <button class="delete-btn" onclick="deleteUser('${user.username}')">Удалить</button>
                             </td>
                         </tr>
@@ -78,24 +76,25 @@
                     </tbody>
                 </table>
                 <div class="pagination">
-                    <button>Назад</button>
-                    <span>Страница 1</span>
-                    <button>Вперед</button>
+                    <button onclick="changePage(-1)">Назад</button>
+                    <span>Страница ${currentPage}/${maxPage}</span>
+                    <button onclick="changePage(1)">Вперед</button>
                 </div>
             </div>
         </div>
 
-        <a href="profile.html" class="back-btn">Назад</a>
+        <a href="/profile" class="back-btn">Назад</a>
     </div>
 
-    <!-- Модальное окно для отображения пароля -->
-    <div id="passwordModal" class="modal">
+    <!-- Модальное окно для отображения auth_url -->
+    <div id="authURLModal" class="modal">
         <div class="modal-content">
-            <h2>Пароль нового пользователя</h2>
-            <p>Сгенерированный пароль:</p>
-            <input type="text" id="generatedPassword" readonly>
-            <button onclick="copyPassword()">Копировать</button>
-            <button onclick="closeModal('passwordModal')">Закрыть</button>
+            <h2>Отправьте эту ссылку пользователю для завершения регистрации</h2>
+            <p>Ссылка:</p>
+            <input type="text" id="authURL" readonly>
+            <button onclick="copyAuthURL()">Копировать</button>
+            <h2>Вы больше не увидите ссылку, если закроете это окно</h2>
+            <button onclick="closeModal('authURLModal')">Закрыть</button>
         </div>
     </div>
 
@@ -104,6 +103,23 @@
         <p><a href="/contacts">Контакты</a> | <a href="/privacy">Политика конфиденциальности</a></p>
     </footer>
 
+    <script>
+    function changePage(delta) {
+        const newPage = Math.max(1, Math.min(${maxPage}, ${currentPage} + delta));
+        to_param_url('/admin-panel', {"page": newPage});
+    }
+
+    function to_param_url(url, paramsDict) {
+        let paramsList = [];
+        for (const key in paramsDict) {
+            if (paramsDict[key] !== null && paramsDict[key] !== undefined && paramsDict[key] !== "") {
+                paramsList.push(`${'${encodeURIComponent(key)}'}=${'${encodeURIComponent(paramsDict[key])}'}`);
+            }
+        }
+        if (paramsList.length > 0) { url += "?" + paramsList.join("&"); }
+        window.location.href = url;
+    }
+    </script>
     <script src="auth.js"></script>
 </body>
 </html>

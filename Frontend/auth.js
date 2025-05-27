@@ -5,12 +5,12 @@ function updateAuthUI() {
     const profileBtn = document.getElementById('profileBtn');
     const logoutBtn = document.getElementById('logoutBtn');
 
-    if (auth_username) {
+    if ("${auth_username}") {
         if (loginBtn) loginBtn.style.display = 'none';
         if (registerBtn) registerBtn.style.display = 'none';
         if (profileBtn) {
             profileBtn.style.display = 'inline';
-            profileBtn.textContent = `Профиль (${auth_username})`;
+            profileBtn.textContent = `Профиль ("${auth_username}")`;
         }
         if (logoutBtn) logoutBtn.style.display = 'inline';
     } else {
@@ -24,12 +24,13 @@ function updateAuthUI() {
 // Функция для регистрации
 function register() {
     const username = document.getElementById('regUsername').value.trim();
-    const password = document.getElementById('regPassword').value.trim();
+    const new_password = document.getElementById('regPassword').value.trim();
+    const repeated_password = document.getElementById('regRepeatedPassword').value.trim();
     const name = document.getElementById('regName').value.trim();
     const surname = document.getElementById('regSurname').value.trim();
     const patronymic = document.getElementById('regPatronymic').value.trim();
 
-    if (!username || !password) {
+    if (!username || !new_password) {
         alert('Введите логин и пароль');
         return;
     }
@@ -41,7 +42,8 @@ function register() {
         },
         body: JSON.stringify({
             "username": username,
-            "password": password,
+            "new_password": new_password,
+            "repeated_password": repeated_password,
             "name": name,
             "surname": surname,
             "patronymic": patronymic,
@@ -50,11 +52,10 @@ function register() {
     .then(response => response.json())
     .then(response => {
         if (response.detail) {
-            alert(`${response.detail}`);
+            alert(`${'${response.detail}'}`);
         } else {
-            auth_username = username;
             closeModal('registerModal');
-            updateAuthUI();
+            location.reload();
         }
     });
 }
@@ -65,15 +66,14 @@ function createUser() {
     const name = document.getElementById('createName').value.trim();
     const surname = document.getElementById('createSurname').value.trim();
     const patronymic = document.getElementById('createPatronymic').value.trim();
-    const password = document.getElementById('createPassword').value.trim();
-    const role = document.getElementById('createRole').value;
+    const access_level = document.getElementById('createRole').value;
 
-    if (!username || !name || !surname || !password || !role) {
+    if (!username || !name || !surname || !access_level) {
         alert('Заполните все обязательные поля: username, имя, фамилия, пароль и уровень доступа');
         return;
     }
 
-    fetch('/create_user', {
+    fetch('/users/create', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -83,34 +83,32 @@ function createUser() {
             "name": name,
             "surname": surname,
             "patronymic": patronymic,
-            "password": password,
-            "role": role
+            "access_level": access_level
         })
     })
     .then(response => response.json())
     .then(response => {
         if (response.detail) {
-            alert(`${response.detail}`);
+            alert(`${'${response.detail}'}`);
         } else {
-            document.getElementById('generatedPassword').value = response.password || password; // Используем сгенерированный пароль или введенный
-            document.getElementById('passwordModal').style.display = 'flex';
+            document.getElementById('authURL').value = response.url;
+            document.getElementById('authURLModal').style.display = 'flex';
             // Очистка формы
             document.getElementById('createUsername').value = '';
             document.getElementById('createName').value = '';
             document.getElementById('createSurname').value = '';
             document.getElementById('createPatronymic').value = '';
-            document.getElementById('createPassword').value = '';
             document.getElementById('createRole').value = '';
         }
     });
 }
 
 // Функция для копирования пароля
-function copyPassword() {
-    const passwordField = document.getElementById('generatedPassword');
-    passwordField.select();
+function copyAuthURL() {
+    const authURLField = document.getElementById('authURL');
+    authURLField.select();
     document.execCommand('copy');
-    alert('Пароль скопирован в буфер обмена');
+    alert('Ссылка скопирована в буфер обмена');
 }
 
 // Функция для входа
@@ -135,7 +133,7 @@ function login() {
     .then(response => response.json())
     .then(response => {
         if (response.detail) {
-            alert(`${response.detail}`);
+            alert(`${'${response.detail}'}`);
         } else {
             window.location.reload(true);
         }
@@ -161,20 +159,20 @@ function logout() {
 // Функция для редактирования пользователя
 function editUser(username) {
     // Логика редактирования (например, открытие модального окна с формой)
-    alert(`Редактировать пользователя: ${username}`);
+    alert(`Редактировать пользователя: ${'${username}'}`);
     // Здесь можно добавить fetch-запрос для получения данных пользователя
 }
 
 // Функция для удаления пользователя
 function deleteUser(username) {
-    if (confirm(`Удалить пользователя ${username}?`)) {
-        fetch(`/delete_user/${username}`, {
+    if (confirm(`Удалить пользователя ${'${username}'}?`)) {
+        fetch(`/users/delete/${'${username}'}`, {
             method: 'DELETE',
         })
         .then(response => response.json())
         .then(response => {
             if (response.detail) {
-                alert(`${response.detail}`);
+                alert(`${'${response.detail}'}`);
             } else {
                 location.reload(); // Перезагрузка страницы после удаления
             }
@@ -185,7 +183,7 @@ function deleteUser(username) {
 // Функция для закрытия модального окна
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
-    
+
     // Очистка полей в зависимости от модального окна
     if (modalId === 'loginModal') {
         document.getElementById('loginUsername').value = '';
@@ -196,8 +194,9 @@ function closeModal(modalId) {
         document.getElementById('regName').value = '';
         document.getElementById('regSurname').value = '';
         document.getElementById('regPatronymic').value = '';
-    } else if (modalId === 'passwordModal') {
-        document.getElementById('generatedPassword').value = '';
+    } else if (modalId === 'authURLModal') {
+        document.getElementById('authURL').value = '';
+        location.reload();
     }
 }
 
@@ -217,9 +216,30 @@ function updateUserRole(select) {
     // Здесь можно добавить fetch для сохранения роли
 }
 
-function applyRole() {
-    // Логика применения роли (например, отправка на сервер)
-    alert('Роль назначена');
+function applyRole(username, accessLevel) {
+    fetch('/set_rights', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            "username": username,
+            "new_access_level": parseInt(accessLevel, 10),
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            if (response.status === 401) {
+                alert('Необходима авторизация');
+            }
+            else if (response.status === 400) {
+                alert('Укажите корректный username пользователя');
+            }
+        } else {
+            alert('Роль назначена');
+            location.reload();
+        }
+    })
 }
 
 // Инициализация UI при загрузке страницы

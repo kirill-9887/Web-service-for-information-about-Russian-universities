@@ -3,40 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Карта вузов</title>
+    <title>Профиль</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=YOUR_API_KEY&lang=ru_RU"></script>
+    <style>
+        .profile-container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 30px;
+            background: rgba(var(--card-bg-r sample_r), 0.97);
+            border-radius: 15px;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(10px);
+        }
+        .profile-field {
+            background: rgba(240, 240, 240, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .profile-field label {
+            display: block;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .profile-field input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            background: #e9ecef;
+            color: #555;
+        }
+        .nav-buttons button {
+            padding: 12px 25px;
+            margin: 5px;
+            font-size: 1em;
+            background: linear-gradient(90deg, #1a73e8, #1557b0);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .nav-buttons button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(26, 115, 232, 0.4);
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Карта вузов</h1>
-        <div id="map"></div>
-        <div class="cta">
-            <a href="home.html">На главную</a>
-            <a href="index.html">Реестр</a>
-            <a href="feedback.html">Обратная связь</a>
+    <!-- Панель авторизации -->
+    <%include file="auth_bar.html"/>
+
+    <div class="profile-container">
+        <h1>Профиль</h1>
+
+        <div class="profile-info">
+            <div class="profile-field">
+                <label>Username:</label>
+                <input type="text" id="username" value="${user.username}">
+            </div>
+            <div class="profile-field">
+                <label>Фамилия:</label>
+                <input type="text" id="surname" value="${user.surname}">
+            </div>
+            <div class="profile-field">
+                <label>Имя:</label>
+                <input type="text" id="name" value="${user.name}">
+            </div>
+            <div class="profile-field">
+                <label>Отчество:</label>
+                <input type="text" id="patronymic" value="${user.patronymic}">
+            </div>
+            <div class="profile-field">
+                <label>Дата регистрации:</label>
+                <input type="text" id="user.registration_date" value="${user.registrate_date[:10]}" readonly>
+            </div>
+            <div class="profile-field">
+                <label>Роль:</label>
+                <input type="text" id="role" value="${[None, 'Читатель', 'Редактор', 'Администратор'][int(user.access_level)]}" readonly>
+            </div>
+            <div class="section">
+                <h2>Смена пароля</h2>
+                <input type="password" id="oldPassword" placeholder="Старый пароль">
+                <input type="password" id="newPassword" placeholder="Новый пароль">
+                <input type="password" id="repeatedPassword" placeholder="Повторите пароль">
+            </div>
+        </div>
+        <div class="nav-buttons">
+            <button onclick="updateProfile()">Сохранить изменения</button>
+            <button onclick="changePassword()">Сменить пароль</button>
+            <button id="admin-panel-btn" style="display: none;" onclick="window.location='/admin-panel'">Админ-панель</button>
         </div>
     </div>
+    <div class="toast" id="toast"></div>
+    <!-- Модальные формы -->
+    <%include file="auth_forms.html"/>
 
     <script>
-        const universities = JSON.parse(localStorage.getItem('universities')) || [];
 
-        function initMap() {
-            ymaps.ready(() => {
-                const map = new ymaps.Map('map', { center: [55.7558, 37.6173], zoom: 5 });
-                universities.forEach(uni => {
-                    const placemark = new ymaps.Placemark(uni.coords, {
-                        hintContent: uni.name,
-                        balloonContent: `<strong>${uni.name}</strong><br>${uni.details}<br><img src="${uni.photo}" style="max-width: 200px; margin-top: 10px;">`
-                    });
-                    map.geoObjects.add(placemark);
-                });
-            });
+        function updateProfile() {
+            const newUserData = {
+                username: document.getElementById('username').value,
+                surname: document.getElementById('surname').value,
+                name: document.getElementById('name').value,
+                patronymic: document.getElementById('patronymic').value,
+            }
+
+            fetch('/change_personal_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newUserData)
+            })
+            .then(response => response.json())
+            .then(response => {
+                showToast(response.detail);
+            })
         }
 
-        initMap();
+        function changePassword() {
+            const newPasswordData = {
+                password: document.getElementById('oldPassword').value,
+                new_password: document.getElementById('newPassword').value,
+                repeated_password: document.getElementById('repeatedPassword').value,
+            }
+            fetch('/change_password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newPasswordData)
+            })
+            .then(response => response.json())
+            .then(response => {
+                showToast(response.detail);
+                if (response.status_ok) {
+                    document.getElementById('oldPassword').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('repeatedPassword').value = '';
+                }
+            })
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+
+            // Show admin panel button only for admins
+            if ("${user.access_level}" === '3') {
+                document.getElementById('admin-panel-btn').style.display = 'block';
+            }
     </script>
-    <script src="video-background.js"></script>
-    <script src="theme.js"></script>
 </body>
 </html>

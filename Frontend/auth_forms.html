@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Формы авторизации</title>
-    <link rel="stylesheet" href="styles.css"> <!-- Подключение стилей -->
+    <link rel="stylesheet" href="/styles.css"> <!-- Подключение стилей -->
 </head>
 <body>
     <div id="loginModal" class="modal">
@@ -19,13 +19,15 @@
     <div id="registerModal" class="modal">
         <div class="modal-content">
             <h2>Регистрация</h2>
-            <input type="text" id="registerUsername" placeholder="Логин">
-            <input type="password" id="registerPassword" placeholder="Пароль">
+            <input type="text" id="regUsername" placeholder="Логин">
+            <input type="text" id="regName" placeholder="Имя">
+            <input type="text" id="regSurname" placeholder="Фамилия">
+            <input type="text" id="regPatronymic" placeholder="Отчество">
+            <input type="password" id="regPassword" placeholder="Пароль">
+            <input type="password" id="regRepeatedPassword" placeholder="Повторите пароль">
             <button onclick="register()">Зарегистрироваться</button>
             <button class="close-btn" onclick="closeModal('registerModal')">Закрыть</button>
         </div>
     </div>
-    <!-- Дополнительный JavaScript, если есть -->
-    <script src="auth.js"></script>
 </body>
 </html>

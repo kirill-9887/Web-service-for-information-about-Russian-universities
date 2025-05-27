@@ -19,7 +19,8 @@ import config
 
 app = FastAPI()
 lookup = TemplateLookup(directories=[os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
-                        module_directory=None)
+                        module_directory=None,
+                        cache_enabled=config.TEMPLATES_CACHE_ENABLED)
 
 
 def get_username_from_session_model(session_model: auth.SessionData):
@@ -357,10 +358,7 @@ async def get_user_profile(session_data: Optional[str] = Cookie(None)):
     session_model = await verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
     user = session_model.user
     template = lookup.get_template(f"{config.FRONT_CATALOG_NAME}/profile.html")
-    html_content = template.render(name=user.name,
-                                   surname=user.surname,
-                                   patronymic=user.patronymic,
-                                   auth_username=user.username,
+    html_content = template.render(user=user,
                                    can_edit=session_model.user.access_level >= dm.ADMIN_ACCESS)
     return HTMLResponse(content=html_content)
 
@@ -398,7 +396,7 @@ async def create_user(user_data: dm.UserInfoData = Body(),
                 session_data: Optional[str] = Cookie(None)):
     """
     On behalf of the administrator, creates a record about a new user in the database.
-    Returns a link that the user will need to complete registration.
+    Returns a JSON with a link that the user will need to complete registration.
     """
     await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
     reset_token = auth.generate_reset_token()
@@ -463,11 +461,22 @@ async def register_new_user(data: dm.UserRegData = Body()):
     return await create_new_session(user_id=user.id)
 
 
-@app.delete("/delete-user")
-async def delete_user(session_data: Optional[str] = Cookie(None)):
+@app.delete("/users/delete/{username}", response_class=JSONResponse)
+async def delete_user(username: str, session_data: Optional[str] = Cookie(None)):
+    """Deletes a user record upon request from the administrator"""
+    session_model = await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
+    if session_model.user.username == username:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Операция не выполнена: вы можете удалить "
+                                                                          "свой профиль в личном кабинете.")
+    await dbt.User.delete_user(id_or_username=username, by_id=False)
+    return JSONResponse({"status_ok": True})
+
+
+@app.delete("/delete-user", response_class=JSONResponse)
+async def delete_user_self(session_data: Optional[str] = Cookie(None)):
     """Deletes a user record upon request from the user"""
     session_model = await verify_session(session_data=session_data, min_access_level=dm.READER_ACCESS)
-    await dbt.User.delete_user(id=session_model.user.id)
+    await dbt.User.delete_user(id_or_username=session_model.user.username, by_id=False)
 
 
 @app.post("/login", response_class=JSONResponse)
@@ -544,28 +553,42 @@ async def set_rights(data: dm.ChangeAccessData = Body(),
                             detail="Такого пользователя не существует")
 
 
-@app.get("/users", response_class=HTMLResponse)
-async def get_users_data(session_data: Optional[str] = Cookie(None),
+@app.get("/admin-panel", response_class=HTMLResponse)
+async def get_admin_panel(session_data: Optional[str] = Cookie(None),
                    page: int = Query(default=1, ge=1),
                    page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1)):
     """Returns a page with a table of data about registered users"""
+    await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
     offset = (page - 1) * page_size
     async with asyncDBSession() as db_session:
         all_users_count = await db_session.scalar(select(func.count()).select_from(dbt.User))
+        max_page = max(1, ceil(all_users_count / page_size))
+        if page > max_page:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         stmt = select(dbt.User).offset(offset).limit(page_size)
         result = await db_session.execute(stmt)
         users = result.scalars()
-        users_json = json.dumps([dm.base2model(user, dm.User).model_dump() for user in users])
     template = lookup.get_template(f"{config.FRONT_CATALOG_NAME}/users_redactor.html")
-    session_model = await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
-    html_content = template.render(users_json=users_json,
+    html_content = template.render(users=users,
                                    currentPage=page,
                                    itemsPerPage=page_size,
-                                   maxPage=max(1, ceil(all_users_count / page_size)),
-                                   auth_username=get_username_from_session_model(session_model))
+                                   maxPage=max_page,
+                                   access_lvls={"reader": dm.READER_ACCESS,
+                                                "editor": dm.EDITOR_ACCESS,
+                                                "admin": dm.ADMIN_ACCESS}
+                                   )
     return HTMLResponse(content=html_content)
 
 # Служебные
+
+@app.get("/auth.js", response_class=FileResponse)
+async def get_auth_js_resource(session_data: Optional[str] = Cookie(None)):
+    """Returns a file required"""
+    template = lookup.get_template(f"{config.FRONT_CATALOG_NAME}/auth.js")
+    session_model = await verify_session(session_data=session_data)
+    content = template.render(auth_username=get_username_from_session_model(session_model))
+    return HTMLResponse(content=content)
+
 
 def get_all_relpaths(directory: str = config.RESOURCES_RELATIVE_CATALOG) -> list[str]:
     """Returns a list of relative paths to files in the specified directory"""

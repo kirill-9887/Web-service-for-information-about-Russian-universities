@@ -1,19 +1,9 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Панель авторизации</title>
-    <link rel="stylesheet" href="styles.css"> <!-- Подключение стилей -->
-</head>
-<body>
-    <div class="auth-bar">
-        <a href="home.html" id="homeBtn">На главную</a>
-        <button id="loginBtn">Войти</button>
-        <button id="registerBtn">Регистрация</button>
-        <a href="#" id="profileBtn" class="hidden">Профиль</a>
-        <button id="logoutBtn" class="hidden">Выйти</button>
-    </div>
-    <script src="auth.js"></script>
-</body>
-</html>
+<div class="auth-bar">
+    <a href="/" id="homeBtn">На главную</a>
+    <button onclick="showLogin()" id="loginBtn">Войти</button>
+    <button onclick="showRegister()" id="registerBtn">Регистрация</button>
+    <a href="/profile" id="profileBtn" class="hidden">Профиль</a>
+    <button onclick="logout()" id="logoutBtn" class="hidden">Выйти</button>
+</div>
+<!-- Дополнительный JavaScript, если есть -->
+<script src="/auth.js"></script>

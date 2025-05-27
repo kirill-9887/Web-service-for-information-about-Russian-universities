@@ -9,7 +9,7 @@
 <body>
     <div class="video-background">
         <video id="background-video" autoplay muted loop>
-            <source src="path/to/your/video.mp4" type="video/mp4">
+            <source src="/background-video.mp4" type="video/mp4">
         </video>
     </div>
     <header>
@@ -167,7 +167,7 @@
 
         function deleteUniversity(id = university.id) {
             fetch(`/delete/university/${'${id}'}`, {
-                method: 'POST',
+                method: 'DELETE',
             })
             .then(response => response.json())
             .then(response => {

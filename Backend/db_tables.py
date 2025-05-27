@@ -68,7 +68,7 @@ class User(Base):
     username = Column(TEXT, nullable=False, unique=True)
     name = Column(TEXT, nullable=False)
     surname = Column(TEXT, nullable=False)
-    patronymic = Column(TEXT)  # TODO: no patronymic?
+    patronymic = Column(TEXT)
     registrate_date = Column(TEXT, default=lambda: str(datetime.datetime.now(pytz.timezone('Europe/Moscow'))))
     password_hash = Column(TEXT, nullable=False)
     access_level = Column(Integer, default=dm.READER_ACCESS)
@@ -151,10 +151,11 @@ class User(Base):
                     raise RecordNotFoundError()
 
     @classmethod
-    async def delete_user(cls, id: str):
+    async def delete_user(cls, id_or_username: str = None, by_id: bool = True):
         async with asyncDBSession() as db_session:
             async with db_session.begin():
-                result = await db_session.execute(select(User).where(User.id == id))
+                stmt = select(User).where(User.id == id_or_username if by_id else User.username == id_or_username)
+                result = await db_session.execute(stmt)
                 user = result.scalars().first()
                 if user:
                     await db_session.delete(user)
