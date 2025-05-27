@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель: редактор университета</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="video-background">
+        <video id="background-video" autoplay muted loop>
+            <source src="path/to/your/video.mp4" type="video/mp4">
+        </video>
+    </div>
+    <header>
+        <div class="container">
+            <h1 class="header-title">Админ-панель: редактор университета</h1>
+            <p>Управление данными образовательных организаций</p>
+            <button class="theme-toggle" onclick="toggleTheme()">Сменить тему</button>
+            <span id="userInfo" class="user-info"></span>
+        </div>
+        <%include file="auth_bar.html"/>
+    </header>
+
+    <div class="container">
+        <div class="admin-container" id="adminContainer" style="display: block;">
+            <h1>Админ-панель</h1>
+            <div class="admin-section">
+                % if mode == "new":
+                % if branch_from:
+                <h2>Добавить филиал для ${head_edu_org_name}</h2>
+                % else:
+                <h2>Добавить головной вуз</h2>
+                % endif
+                % elif mode == "edit":
+                <h2>Редактировать вуз</h2>
+                % endif
+                <input type="text" id="univ_id" disabled>
+                <input type="text" id="full_name" placeholder="Полное наименование">
+                <input type="text" id="short_name" placeholder="Сокращенное наименование">
+                <input type="text" id="head_edu_org_id" placeholder="Головная организация" value="${branch_from}" disabled>
+                <input type="text" id="is_branch" placeholder="Является филиалом" value="${int(bool(branch_from))}" disabled>
+                <input type="text" id="post_address" placeholder="Юридический адрес">
+                <input type="text" id="phone" placeholder="Телефон">
+                <input type="text" id="fax" placeholder="Факс">
+                <input type="text" id="email" placeholder="Электронная почта">
+                <input type="text" id="web_site" placeholder="Сайт">
+                <input type="text" id="ogrn" placeholder="ОГРН">
+                <input type="text" id="inn" placeholder="ИНН">
+                <input type="text" id="kpp" placeholder="КПП">
+                <input type="text" id="head_post" placeholder="Должность руководителя">
+                <input type="text" id="head_name" placeholder="ФИО руководителя">
+                <input type="text" id="form_name" placeholder="Организационно-правовая форма">
+                <input type="text" id="kind_name" placeholder="Вид организации">
+                <input type="text" id="type_name" placeholder="Тип организации">
+                <input type="text" id="region_name" placeholder="Регион">
+                <input type="text" id="federal_district_name" placeholder="Полное наименование федерального округа">
+                % if mode == "new":
+                <button onclick="addUniversity()">Добавить</button>
+                <button onclick="clearForm()">Очистить</button>
+                % elif mode == "edit":
+                <button onclick="editUniversity()">Сохранить изменения</button>
+                <button onclick="deleteUniversity()">Удалить запись</button>
+                <button onclick="window.location.href='/universities/edit/new'">Добавить новый вуз</button>
+                % endif
+            </div>
+        </div>
+    </div>
+
+    <%include file="auth_forms.html"/>
+
+    <footer>
+        <p>© 2025 Реестр образовательных организаций. Все права защищены.</p>
+        <p><a href="#">Контакты</a> | <a href="#">Политика конфиденциальности</a></p>
+    </footer>
+
+    <script>
+        let auth_username = "${auth_username}";
+
+        const university = ${univ};
+        let uni_id = null;
+        if (university) {
+            uni_id = university.id;
+            fillData(university);
+        }
+
+        function getFormData() {
+            const newUni = {
+                id: uni_id,
+                full_name: document.getElementById('full_name').value,
+                short_name: document.getElementById('short_name').value,
+                head_edu_org_id: document.getElementById('head_edu_org_id').value,
+                is_branch: parseInt(document.getElementById('is_branch').value, 10),
+                post_address: document.getElementById('post_address').value,
+                phone: document.getElementById('phone').value,
+                fax: document.getElementById('fax').value,
+                email: document.getElementById('email').value,
+                web_site: document.getElementById('web_site').value,
+                ogrn: document.getElementById('ogrn').value,
+                inn: document.getElementById('inn').value,
+                kpp: document.getElementById('kpp').value,
+                head_post: document.getElementById('head_post').value,
+                head_name: document.getElementById('head_name').value,
+                form_name: document.getElementById('form_name').value,
+                kind_name: document.getElementById('kind_name').value,
+                type_name: document.getElementById('type_name').value,
+                region_name: document.getElementById('region_name').value,
+                federal_district_name: document.getElementById('federal_district_name').value,
+            };
+            return newUni;
+        }
+
+        function addUniversity() {
+            const newUni = getFormData();
+            fetch('/new/university', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newUni)
+            })
+            .then(response => response.json())
+            .then(response => {
+                alert(response.detail);
+                if (response.id)
+                    window.location.href = `/universities/edit/${'${response.id}'}`;
+            })
+        }
+
+        function editUniversity() {
+            const newUni = getFormData();
+            fetch('/edit/university', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newUni)
+            })
+            .then(response => response.json())
+            .then(response => {
+                alert(response.detail);
+            })
+        }
+
+        function fillData(uni) {
+            document.getElementById('univ_id').value = uni.id;
+            document.getElementById('full_name').value = uni.full_name;
+            document.getElementById('short_name').value = uni.short_name;
+            document.getElementById('head_edu_org_id').value = uni.head_edu_org_id;
+            document.getElementById('is_branch').value = uni.is_branch;
+            document.getElementById('post_address').value = uni.post_address;
+            document.getElementById('phone').value = uni.phone;
+            document.getElementById('fax').value = uni.fax;
+            document.getElementById('email').value = uni.email;
+            document.getElementById('web_site').value = uni.web_site;
+            document.getElementById('ogrn').value = uni.ogrn;
+            document.getElementById('inn').value = uni.inn;
+            document.getElementById('kpp').value = uni.kpp;
+            document.getElementById('head_post').value = uni.head_post;
+            document.getElementById('head_name').value = uni.head_name;
+            document.getElementById('form_name').value = uni.form_name;
+            document.getElementById('kind_name').value = uni.kind_name;
+            document.getElementById('type_name').value = uni.type_name;
+            document.getElementById('region_name').value = uni.region_name;
+            document.getElementById('federal_district_name').value = uni.federal_district_name;
+        }
+
+        function deleteUniversity(id = university.id) {
+            fetch(`/delete/university/${'${id}'}`, {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(response => {
+                alert(response.detail);
+                if (response.detail === "Successfully")
+                    window.location.href = '/universities';
+            })
+        }
+
+        function clearForm() {
+            document.getElementById('full_name').value = "";
+            document.getElementById('short_name').value = "";
+            document.getElementById('post_address').value = "";
+            document.getElementById('phone').value = "";
+            document.getElementById('fax').value = "";
+            document.getElementById('email').value = "";
+            document.getElementById('web_site').value = "";
+            document.getElementById('ogrn').value = "";
+            document.getElementById('inn').value = "";
+            document.getElementById('kpp').value = "";
+            document.getElementById('head_post').value = "";
+            document.getElementById('head_name').value = "";
+            document.getElementById('form_name').value = "";
+            document.getElementById('kind_name').value = "";
+            document.getElementById('type_name').value = "";
+            document.getElementById('region_name').value = "";
+            document.getElementById('federal_district_name').value = "";
+        }
+    </script>
+    <script src="/video-background.js"></script>
+    <script src="/theme.js"></script>
+    <script src="/auth.js"></script>
+</body>
+</html>
