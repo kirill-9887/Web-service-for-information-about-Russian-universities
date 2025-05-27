@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта вузов</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=YOUR_API_KEY&lang=ru_RU"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Карта вузов</h1>
+        <div id="map"></div>
+        <div class="cta">
+            <a href="home.html">На главную</a>
+            <a href="index.html">Реестр</a>
+            <a href="feedback.html">Обратная связь</a>
+        </div>
+    </div>
+
+    <script>
+        const universities = JSON.parse(localStorage.getItem('universities')) || [];
+
+        function initMap() {
+            ymaps.ready(() => {
+                const map = new ymaps.Map('map', { center: [55.7558, 37.6173], zoom: 5 });
+                universities.forEach(uni => {
+                    const placemark = new ymaps.Placemark(uni.coords, {
+                        hintContent: uni.name,
+                        balloonContent: `<strong>${uni.name}</strong><br>${uni.details}<br><img src="${uni.photo}" style="max-width: 200px; margin-top: 10px;">`
+                    });
+                    map.geoObjects.add(placemark);
+                });
+            });
+        }
+
+        initMap();
+    </script>
+    <script src="video-background.js"></script>
+    <script src="theme.js"></script>
+</body>
+</html>
