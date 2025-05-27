@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Реестр образовательных организаций</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Реестр образовательных организаций</h1>
+            <p>• Открытые данные •</p>
+            <button class="theme-toggle" onclick="toggleTheme()">Сменить тему</button>
+            <span id="userInfo" class="user-info"></span>
+        </div>
+        <a href="/auth_bar.html">1</a>
+    </header>
+
+    <div class="container">
+        <div class="filters">
+            <div class="filter-group">
+                <select id="regionFilter">
+                    <option value="">Все регионы</option>
+                    % for region_name in regions:
+                    <option value="${region_name}">${region_name}</option>
+                    % endfor
+                </select>
+                <input type="text" id="nameSearchFilter" placeholder="Поиск по имени">
+                <button onclick="applyFilters()">Применить</button>
+                % if can_edit:
+                <button onclick="window.location.href='/universities/edit/new'">Добавить новый вуз</button>
+                % endif
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('full_name')">Полное наименование</th>
+                        <th onclick="sortTable('short_name')">Сокращенное наименование</th>
+                        <th onclick="sortTable('is_branch')">Является филиалом</th>
+                        <th onclick="sortTable('kind_name')">Вид организации</th>
+                        <th onclick="sortTable('region_name')">Субъект РФ</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="registryTable"></tbody>
+            </table>
+            <div class="pagination">
+                <button onclick="changePage(-1)">Назад</button>
+                <span id="pageInfo">Страница 1</span>
+                <button onclick="changePage(1)">Вперед</button>
+            </div>
+        </div>
+    </div>
+    <%include file="auth_forms.html"/>
+    <script>
+        let auth_username = "${auth_username}";
+
+        const universities = ${univs_json};
+        let currentPage = ${currentPage};
+        const itemsPerPage = ${itemsPerPage};
+        const maxPage = ${maxPage};
+        let sortColumn = "${sortColumn}";
+        let reverse = ${reverse};
+        let regionFilter = "${regionFilter}";
+        let nameSearchFilter = "${nameSearchFilter}";
+
+        document.getElementById('regionFilter').value = regionFilter;
+        document.getElementById('nameSearchFilter').value = nameSearchFilter;
+
+        function renderTable(filteredData = universities) {
+            const tbody = document.getElementById('registryTable');
+            tbody.innerHTML = '';
+
+            const regionFilter = document.getElementById('regionFilter').value;
+
+            filteredData.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><a href="/universities/${'${item.id}'}">${'${item.full_name}'}</a></td>
+                    <td>${'${item.short_name}'}</td>
+                    <td>${'${item.is_branch}'}</td>
+                    <td>${'${item.kind_name}'}</td>
+                    <td>${'${item.region_name}'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('pageInfo').textContent = `Страница ${'${currentPage}'} из ${'${maxPage}'}`;
+        }
+
+        function sortTable(column) {
+            if (sortColumn === column) reverse = (reverse + 1) % 2;
+            else { sortColumn = column; reverse = 0; }
+            update_data({"page": 1, "region": regionFilter, "search": nameSearchFilter, "sort": sortColumn, "reverse": reverse});
+        }
+
+        function changePage(delta) {
+            const newPage = Math.max(1, Math.min(maxPage, currentPage + delta));
+            update_data({"page": newPage, "region": regionFilter, "search": nameSearchFilter, "sort": sortColumn, "reverse": reverse});
+        }
+
+        function applyFilters() {
+            regionFilter = document.getElementById('regionFilter').value;
+            nameSearchFilter = document.getElementById('nameSearchFilter').value;
+            update_data({"page": 1, "region": regionFilter, "search": nameSearchFilter, "sort": sortColumn, "reverse": reverse});
+        }
+
+        function toggleFavorite(id) {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user) { alert('Войдите в систему'); return; }
+            const index = favorites.indexOf(id);
+            if (index === -1) favorites.push(id);
+            else favorites.splice(index, 1);
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+            renderTable();
+        }
+
+        function update_data(paramsDict) {
+            let url = '/universities';
+            let paramsList = [];
+            for (const key in paramsDict) {
+                if (paramsDict[key] !== null && paramsDict[key] !== undefined && paramsDict[key] !== "") {
+                    paramsList.push(`${'${encodeURIComponent(key)}'}=${'${encodeURIComponent(paramsDict[key])}'}`);
+                }
+            }
+            if (paramsList.length > 0) { url += "?" + paramsList.join("&"); }
+            window.location.href = url;
+        }
+
+        window.onload = function() {
+            renderTable();
+        };
+    </script>
+    <script src="/video-background.js"></script>
+    <script src="/theme.js"></script>
+    <script src="/auth.js"></script>
+</body>
+</html>
