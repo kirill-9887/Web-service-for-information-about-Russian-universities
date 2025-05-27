@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Реестр образовательных организаций</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="video-background">
+        <video id="background-video" autoplay muted loop>
+            <source src="path/to/your/video.mp4" type="video/mp4">
+        </video>
+    </div>
+    <header>
+        <div class="container">
+            <h1 class="header-title">Реестр образовательных организаций</h1>
+            <p>• Открытые данные •</p>
+            <button class="theme-toggle" onclick="toggleTheme()">Сменить тему</button>
+            <span id="userInfo" class="user-info"></span>
+        </div>
+        <a href="/auth_bar.html">Авторизация</a>
+    </header>
+
+    <div class="container">
+        <div class="filters">
+            <div class="filter-group">
+                <select id="ugsFilter">
+                    <option value="">Все укрупненные группы</option>
+                    % for ugsCode in ugsList:
+                    <option value="${ugsCode}">${ugsCode}</option>
+                    % endfor
+                </select>
+                <select id="progCodeFilter">
+                    <option value="">Все коды специальностей</option>
+                    % for progCode in progCodeList:
+                    <option value="${progCode}">${progCode}</option>
+                    % endfor
+                </select>
+                % if univ_id:
+                <label>Данные показаны для одного вуза</label>
+                <button onclick="resetUniv()">Сбросить вуз</button>
+                % endif
+                <button onclick="applyFilters()">Применить</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('university.full_name')">ВУЗ</th>
+                        <th onclick="sortTable('type_name')">Тип программы</th>
+                        <th onclick="sortTable('edu_level_name')">Уровень ОП</th>
+                        <th onclick="sortTable('ugs_code')">Код укрупненной группы</th>
+                        <th onclick="sortTable('ugs_name')">Укрупненная группа</th>
+                        <th onclick="sortTable('programm_code')">Код ОП</th>
+                        <th onclick="sortTable('programm_name')">Наименование ОП</th>
+                        <th onclick="sortTable('qualification')">Квалификация</th>
+                        <th onclick="sortTable('edu_normative_period')">Длительность обучения</th>
+                        <th onclick="sortTable('is_accredited')">Аккредитована</th>
+                        <th onclick="sortTable('is_canceled')">Лишение программы ОП</th>
+                        <th onclick="sortTable('is_suspended')">Приостановка ОП</th>
+                        % if can_edit:
+                        <th>Действия</th>
+                        % endif
+                    </tr>
+                </thead>
+                <tbody id="registryTable"></tbody>
+            </table>
+            <div class="pagination">
+                <button onclick="changePage(-1)">Назад</button>
+                <span id="pageInfo">Страница 1</span>
+                <button onclick="changePage(1)">Вперед</button>
+            </div>
+        </div>
+    </div>
+
+    <a href="/auth_forms.html">Форма регистрации</a>
+
+    <footer>
+        <p>© 2025 Реестр образовательных организаций. Все права защищены.</p>
+        <p><a href="#">Контакты</a> | <a href="#">Политика конфиденциальности</a></p>
+    </footer>
+
+    <script>
+        let auth_username = "${auth_username}";
+
+        const eduprograms = ${eduprogs_json};
+        const currentPage = ${currentPage};
+        const itemsPerPage = ${itemsPerPage};
+        const maxPage = ${maxPage};
+        let sortColumn = "${sortColumn}";
+        let reverse = ${reverse};
+        let ugsFilter = "${ugsFilter}";
+        let progCodeFilter = "${progCodeFilter}";
+        const univ_id = "${univ_id}";
+
+        document.getElementById('ugsFilter').value = ugsFilter;
+        document.getElementById('progCodeFilter').value = progCodeFilter;
+
+        function renderTable(data = eduprograms) {
+            const tbody = document.getElementById('registryTable');
+            tbody.innerHTML = '';
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><a href="/universities/${'${item.university_id}'}">${'${item.university_full_name}'}</a></td>
+                    <td>${'${item.type_name}'}</td>
+                    <td>${'${item.edu_level_name}'}</td>
+                    <td>${'${item.ugs_code}'}</td>
+                    <td>${'${item.ugs_name}'}</td>
+                    <td>${'${item.programm_code}'}</td>
+                    <td>${'${item.programm_name}'}</td>
+                    <td>${'${item.qualification}'}</td>
+                    <td>${'${item.edu_normative_period}'}</td>
+                    <td>${'${item.is_accredited}'}</td>
+                    <td>${'${item.is_canceled}'}</td>
+                    <td>${'${item.is_suspended}'}</td>
+                    % if can_edit:
+                    <td><button onclick="window.location.href='/eduprograms/edit/${'${item.id}'}'">Редактировать</button></td>
+                    % endif
+                `;
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('pageInfo').textContent = `Страница ${'${currentPage}'} из ${'${maxPage}'}`;
+        }
+
+        function sortTable(column) {
+            if (sortColumn === column) reverse = (reverse + 1) % 2;
+            else { sortColumn = column; reverse = 0; }
+            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
+        }
+
+        function changePage(delta) {
+            const newPage = Math.max(1, Math.min(maxPage, currentPage + delta));
+            update_data({"page": newPage, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
+        }
+
+        function applyFilters() {
+            ugsFilter = document.getElementById('ugsFilter').value;
+            progCodeFilter = document.getElementById('progCodeFilter').value;
+            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
+        }
+
+        function toggleFavorite(id) {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user) { alert('Войдите в систему'); return; }
+            const index = favorites.indexOf(id);
+            if (index === -1) favorites.push(id);
+            else favorites.splice(index, 1);
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+            renderTable();
+        }
+
+        function resetUniv() {
+            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": ""});
+        }
+
+        function update_data(paramsDict) {
+            let url = '/eduprograms';
+            let paramsList = [];
+            for (const key in paramsDict) {
+                if (paramsDict[key] !== null && paramsDict[key] !== undefined && paramsDict[key] !== "") {
+                    paramsList.push(`${'${encodeURIComponent(key)}'}=${'${encodeURIComponent(paramsDict[key])}'}`);
+                }
+            }
+            if (paramsList.length > 0) { url += "?" + paramsList.join("&"); }
+            window.location.href = url;
+        }
+
+        window.onload = function() {
+            renderTable();
+        };
+    </script>
+    <script src="/video-background.js"></script>
+    <script src="/theme.js"></script>
+    <script src="/auth.js"></script>
+</body>
+</html>
