@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель: редактор образовательной программы</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Arial', sans-serif; }
+        body { background: #f0f2f5; color: #1a1a1a; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 20px; }
+        .admin-container { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border: 1px solid #e0e0e0; }
+        h1 { font-size: 2em; margin-bottom: 20px; color: #1a73e8; font-weight: 600; }
+        .auth-form, .admin-section { margin-bottom: 20px; }
+        input, textarea, button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 100%; max-width: 300px; margin-bottom: 10px; font-size: 1em; }
+        textarea { width: 100%; max-width: 500px; height: 100px; }
+        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: 500; transition: background 0.3s; }
+        button:hover { background: #1557b0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        th { background: #f8f9fa; font-weight: 600; color: #333; }
+        td { color: #444; }
+        .edit-btn, .delete-btn { padding: 5px 10px; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+        .delete-btn { background: #d32f2f; }
+        .edit-btn:hover { background: #1557b0; }
+        .delete-btn:hover { background: #b71c1c; }
+    </style>
+    <%include file="auth_bar.html"/>
+</head>
+<body>
+    <%include file="auth_forms.html"/>
+    <div class="container">
+        <div class="admin-container" id="adminContainer" style="display: 'block';">
+            <h1>Админ-панель</h1>
+            <div class="admin-section">
+                % if mode == "new":
+                <h2>Добавить образовательную программу для ${university_full_name}</h2>
+                % elif mode == "edit":
+                <h2>Редактировать образовательную программу для ${university_full_name}</h2>
+                % endif
+                <input type="text" id="eduprog_id" value="" disabled>
+                <input type="text" id="type_name" placeholder="Тип программы">
+                <input type="text" id="edu_level_name" placeholder="Уровень ОП">
+                <input type="text" id="programm_name" placeholder="Наименование ОП">
+                <input type="text" id="programm_code" placeholder="Код ОП">
+                <input type="text" id="ugs_name" placeholder="Наименование укрупненной группы специальностей">
+                <input type="text" id="ugs_code" placeholder="Код укрупненной группы специальностей">
+                <input type="text" id="edu_normative_period" placeholder="Нормативный период">
+                <input type="text" id="qualification" placeholder="Наименование квалификации">
+                <input type="text" id="is_accredited" placeholder="Аккредитована / отказ (аккредитована - 0, отказ - 1)">
+                <input type="text" id="is_canceled" placeholder="Лишение программы ОП">
+                <input type="text" id="is_suspended" placeholder="Приостановка ОП">
+                <input type="text" id="university_id" value="${university_id}" disabled>
+                % if mode == "new":
+                <button onclick="addEduprog()">Добавить</button>
+                <button onclick="clearForm()">Очистить</button>
+                % elif mode == "edit":
+                <button onclick="editEduprog()">Сохранить изменения</button>
+                <button onclick="deleteEduprog()">Удалить запись</button>
+                % endif
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let auth_username = "${auth_username}";
+
+        const eduprog = ${eduprog};
+        let eduprog_id = null;
+        if (eduprog) {
+            eduprog_id = eduprog.id;
+            fillData(eduprog);
+        }
+
+        function getFormData() {
+            const newEduprog = {
+                id: eduprog_id,
+                type_name: document.getElementById('type_name').value,
+                edu_level_name: document.getElementById('edu_level_name').value,
+                programm_name: document.getElementById('programm_name').value,
+                programm_code: document.getElementById('programm_code').value,
+                ugs_name: document.getElementById('ugs_name').value,
+                ugs_code: document.getElementById('ugs_code').value,
+                edu_normative_period: document.getElementById('edu_normative_period').value,
+                qualification: document.getElementById('qualification').value,
+                is_accredited: parseInt(document.getElementById('is_accredited').value, 10),
+                is_canceled: parseInt(document.getElementById('is_canceled').value, 10),
+                is_suspended: parseInt(document.getElementById('is_suspended').value, 10),
+                university_id: document.getElementById('university_id').value,
+            };
+            return newEduprog;
+        }
+
+        function addEduprog() {
+            const newEduprog = getFormData();
+            fetch('/new/eduprogram', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newEduprog)
+            })
+            .then(response => response.json())
+            .then(response => {
+                alert(response.detail);
+                if (response.id)
+                    window.location.href = `/eduprograms/edit/${'${response.id}'}`;
+            })
+        }
+
+        function editEduprog() {
+            const newEduprog = getFormData();
+            fetch('/edit/eduprogram', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newEduprog)
+            })
+            .then(response => response.json())
+            .then(response => {
+                alert(response.detail);
+            })
+        }
+
+        function fillData(eduprog) {
+            document.getElementById('eduprog_id').value = eduprog.id;
+            document.getElementById('type_name').value = eduprog.type_name;
+            document.getElementById('edu_level_name').value = eduprog.edu_level_name;
+            document.getElementById('programm_name').value = eduprog.programm_name;
+            document.getElementById('programm_code').value = eduprog.programm_code;
+            document.getElementById('ugs_name').value = eduprog.ugs_name;
+            document.getElementById('ugs_code').value = eduprog.ugs_code;
+            document.getElementById('edu_normative_period').value = eduprog.edu_normative_period;
+            document.getElementById('qualification').value = eduprog.qualification;
+            document.getElementById('is_accredited').value = eduprog.is_accredited;
+            document.getElementById('is_canceled').value = eduprog.is_canceled;
+            document.getElementById('is_suspended').value = eduprog.is_suspended;
+        }
+
+        function deleteEduprog(id = eduprog.id) {
+            fetch(`/delete/eduprogram/${'${id}'}`, {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(response => {
+                alert(response.detail);
+                if (response.detail === "Successfully")
+                    window.location.href = '/eduprograms';
+            })
+        }
+
+        function clearForm() {
+            document.getElementById('type_name').value = "";
+            document.getElementById('edu_level_name').value = "";
+            document.getElementById('programm_name').value = "";
+            document.getElementById('programm_code').value = "";
+            document.getElementById('ugs_name').value = "";
+            document.getElementById('ugs_code').value = "";
+            document.getElementById('edu_normative_period').value = "";
+            document.getElementById('qualification').value = "";
+            document.getElementById('is_accredited').value = "";
+            document.getElementById('is_canceled').value = "";
+            document.getElementById('is_suspended').value = "";
+        }
+    </script>
+    <script src="/theme.js"></script>
+    <script src="/auth.js"></script>
+</body>
+</html>
