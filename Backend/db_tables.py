@@ -15,26 +15,7 @@ from typing import Optional
 import auth
 from database import engine, asyncDBSession
 import data_models as dm
-
-
-class NotUnivError(Exception):
-    """The data does not apply to higher education"""
-    pass
-
-
-class RecordNotFoundError(Exception):
-    """Record not found in database"""
-    pass
-
-
-class UniqueConstraintFailedError(Exception):
-    """The value of some field of the record is not unique"""
-    pass
-
-
-class SelfCreatedIDError(Exception):
-    """Attempt to insert a record into a table with a non-empty id field"""
-    pass
+from exceptions import *
 
 
 def provide_uuid() -> str:
@@ -395,6 +376,13 @@ class EduProg(Base):
                     await db_session.delete(eduprog)
                 elif not eduprog.custom and not from_parser:
                     eduprog.deleted = 1
+
+
+@event.listens_for(EduProg, 'before_insert')
+@event.listens_for(EduProg, 'before_update')
+def eduprog_before_listener(mapper, connection: AsyncConnection, target):
+    if not ("ВО" in target.edu_level_name or "высшее" in target.edu_level_name.lower()):
+        raise NotUnivError
 
 
 class InMemoryCache:

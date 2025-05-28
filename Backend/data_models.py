@@ -2,6 +2,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, BeforeValidator, field_validator, model_validator
 from typing import Type
 import re
+from exceptions import NotUnivError
 
 
 ADMIN_ACCESS = 3  # Назначает права пользователям
