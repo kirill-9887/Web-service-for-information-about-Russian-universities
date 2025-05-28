@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель: управление сервером</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <%include file="auth_bar.html"/>
+
+    <div class="video-background">
+        <video id="background-video" autoplay loop muted>
+            <source src="/background-video.mp4" type="video/mp4">
+        </video>
+    </div>
+
+    <header>
+        <h1 class="header-title">Админ-панель: управление сервером</h1>
+    </header>
+
+    <div class="container admin-container">
+        <div class="admin-section">
+            <h2>Управление автоматическим обновлением данными из реестра</h2>
+            <div class="container">
+                <div class="cta main-buttons">
+                    <button onclick="startSchedule()">Запустить периодическое обновление</button>
+                    <button onclick="checkSchedule()">Проверить статус периодического обновления</button>
+                    <button onclick="stopSchedule()">Остановить периодическое обновление</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2025 Реестр образовательных организаций. Все права защищены.</p>
+        <p><a href="/contacts">Контакты</a> | <a href="/privacy">Политика конфиденциальности</a></p>
+    </footer>
+
+    <%include file="auth_forms.html"/>
+
+    <script>
+    function startSchedule() {
+        fetch('/opendata/schedule/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({"interval_seconds": 10})
+        })
+        .then(response => response.json())
+        .then(response => {
+            alert(response.info);
+        })
+    }
+
+    function stopSchedule() {
+        fetch('/opendata/schedule/stop', {
+            method: 'POST',
+        })
+        .then(response => response.json())
+        .then(response => {
+            alert(response.info);
+        })
+    }
+
+    function checkSchedule() {
+        fetch('/opendata/schedule/check', {
+            method: 'POST',
+        })
+        .then(response => response.json())
+        .then(response => {
+            if (response.status) {
+                alert("Периодическое обновление активно");
+            } else {
+                alert("Периодическое обновление не активно");
+            }
+        })
+    }
+
+    </script>
+    <script src="/auth.js"></script>
+</body>
+</html>

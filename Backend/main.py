@@ -15,7 +15,8 @@ import auth
 import db_tables as dbt
 import data_models as dm
 import config
-
+import schedule
+import exceptions as expt
 
 app = FastAPI()
 lookup = TemplateLookup(directories=[os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
@@ -173,9 +174,9 @@ async def post_edit_eduprogram(data: dm.EduProg,
         elif mode == "edit":
             await dbt.EduProg.update(data)
             return JSONResponse({"detail": "Successfully"})
-    except dbt.RecordNotFoundError:
+    except expt.RecordNotFoundError:
         raise HTTPException(status_code=404, detail="Образовательная программа не найдена")
-    except dbt.NotUnivError:
+    except expt.NotUnivError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Данные об образовательной программе не указывают на ее принадлежность "
                                    "к высшему образованию")
@@ -193,7 +194,7 @@ async def delete_eduprogram(id: str,
     try:
         await dbt.EduProg.delete(id, from_parser=False)
         return JSONResponse(content={"detail": "Successfully"}, status_code=status.HTTP_200_OK)
-    except dbt.RecordNotFoundError:
+    except expt.RecordNotFoundError:
         return JSONResponse(content={"detail": "ОП не найдена"}, status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         print(f"Ошибка при попытке удалить ОП: {e}")
@@ -221,13 +222,13 @@ async def get_univ_list(session_data: Optional[str] = Cookie(None),
         stmt_count = select(func.count()).select_from(dbt.University).where(and_(
             dbt.University.deleted == 0,
             or_(not region, dbt.University.region_name == region),
-            or_(not search, and_(*(dbt.University.name_search.like(f"%{word}%") for word in search.lower().split()))),
+            or_(not search, and_(True, *(dbt.University.name_search.like(f"%{word}%") for word in search.lower().split()))),
         ))
         all_univs_count = await db_session.scalar(stmt_count)
         stmt = select(dbt.University).where(and_(
             dbt.University.deleted == 0,
             or_(not region, dbt.University.region_name == region),
-            or_(not search, and_(*(dbt.University.name_search.like(f"%{word}%") for word in search.lower().split()))),
+            or_(not search, and_(True, *(dbt.University.name_search.like(f"%{word}%") for word in search.lower().split()))),
         )).order_by(order, dbt.University.short_name).offset(offset).limit(page_size)
         on_page_univs_result = await db_session.execute(stmt)
         univs_json = json.dumps([dm.base2model(univ, dm.UniversityViewBriefly).model_dump()
@@ -323,9 +324,9 @@ async def post_edit_university(mode: Literal["new", "edit"],
         elif mode == "edit":
             await dbt.University.update(data=data)
             return JSONResponse({"detail": "Successfully"})
-    except dbt.RecordNotFoundError:
+    except expt.RecordNotFoundError:
         raise HTTPException(status_code=404, detail="Вуз не найден")
-    except dbt.NotUnivError:
+    except expt.NotUnivError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Название организации не указывает на принадлежность к высшему образованию")
     except Exception as e:
@@ -345,7 +346,7 @@ async def delete_university(id: str,
     try:
         await dbt.University.delete(id, from_parser=False)
         return JSONResponse(content={"detail": "Successfully"}, status_code=status.HTTP_200_OK)
-    except dbt.RecordNotFoundError:
+    except expt.RecordNotFoundError:
         return JSONResponse(content={"detail": "Вуз не найден"}, status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         print(f"Ошибка при попытке удалить вуз: {e}")
@@ -407,7 +408,7 @@ async def create_user(user_data: dm.UserInfoData = Body(),
             incomplete_registration=1,
         )
         user_id = user.id
-    except dbt.UniqueConstraintFailedError:
+    except expt.UniqueConstraintFailedError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Имя пользователя уже занято")
     return {"url": f"{config.PREFIX}://{config.HOST}:{config.PORT}"
                    f"/users/finish-reg?user_id={user_id}&token={reset_token}"}
@@ -456,7 +457,7 @@ async def register_new_user(data: dm.UserRegData = Body()):
             **data.model_dump(exclude={"new_password", "repeated_password"}),
             password_hash=password_hash,
         )
-    except dbt.UniqueConstraintFailedError:
+    except expt.UniqueConstraintFailedError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Имя пользователя уже занято")
     return await create_new_session(user_id=user.id)
 
@@ -513,7 +514,7 @@ async def change_personal_data(data: dm.UserOwnData,
     try:
         await dbt.User.update_personal_data(id=session_model.user.id, personal_data=data)
         return JSONResponse({"detail": "Профиль обновлен"})
-    except dbt.UniqueConstraintFailedError:
+    except expt.UniqueConstraintFailedError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Имя пользователя уже занято")
     except Exception as e:
         print("ERROR:", e)
@@ -548,7 +549,7 @@ async def set_rights(data: dm.ChangeAccessData = Body(),
     await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
     try:
         await dbt.User.update_access_level(username=data.username, access_level=data.new_access_level)
-    except dbt.RecordNotFoundError:
+    except expt.RecordNotFoundError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Такого пользователя не существует")
 
@@ -579,7 +580,15 @@ async def get_admin_panel(session_data: Optional[str] = Cookie(None),
                                    )
     return HTMLResponse(content=html_content)
 
-# Служебные
+
+@app.get("/server-panel", response_class=HTMLResponse)
+async def get_server_panel(session_data: Optional[str] = Cookie(None)):
+    """Returns a page for control updating DB"""
+    await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
+    template = lookup.get_template(f"{config.FRONT_CATALOG_NAME}/server_panel.html")
+    html_content = template.render()
+    return HTMLResponse(content=html_content)
+
 
 @app.get("/auth.js", response_class=FileResponse)
 async def get_auth_js_resource(session_data: Optional[str] = Cookie(None)):
@@ -614,8 +623,56 @@ async def get_resource(filename: str, resources_white_list: list[str] = Depends(
     return FileResponse(path)
 
 
+# Эндпоинты для управления загрузкой
+@app.post("/opendata/update")
+async def update_data(scheduler = Depends(lambda: app.state.scheduler),
+                      session_data: Optional[str] = Cookie(None)):
+    """Ручной запуск обновления данных (только для админа)"""
+    await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
+    try:
+        scheduler.stop()
+        scheduler.start()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/opendata/schedule/start", response_class=JSONResponse)
+async def start_scheduled_download(body = Body(),
+                                   scheduler = Depends(lambda: app.state.scheduler),
+                                   session_data: Optional[str] = Cookie(None)):
+    """Запуск периодической загрузки (только для админа)"""
+    await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
+    try:
+        scheduler.start(interval_seconds=body["interval_seconds"])
+        return {"info": "Периодическое обновление запущено"}
+    except Exception as e:
+        return {"info": "Не удалось запустить периодическое обновление"}
+
+
+@app.post("/opendata/schedule/stop", response_class=JSONResponse)
+async def stop_scheduled_download(scheduler = Depends(lambda: app.state.scheduler),
+                                  session_data: Optional[str] = Cookie(None)):
+    """Остановка периодической загрузки (только для админа)"""
+    await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
+    print("Try stop")
+    scheduler.stop()
+    return {"info": "Периодическое обновление остановлено"}
+
+
+@app.post("/opendata/schedule/check", response_class=JSONResponse)
+async def stop_scheduled_download(scheduler = Depends(lambda: app.state.scheduler),
+                                  session_data: Optional[str] = Cookie(None)):
+    """Проверка периодической загрузки (только для админа)"""
+    await verify_session(session_data=session_data, min_access_level=dm.ADMIN_ACCESS)
+    if scheduler.is_run():
+        return {"status": 1}
+    return {"status": 0}
+
+
 async def main():
     await dbt.create_tables()
+    app.state.scheduler = schedule.Scheduler(interval_seconds=5)
     conf = uvicorn.Config(
         app=app,
         host=config.HOST,

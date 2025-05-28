@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Установить пароль</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Arial', sans-serif; }
+        body { background: #f0f2f5; color: #1a1a1a; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 20px; }
+        .profile-container { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border: 1px solid #e0e0e0; }
+        h1 { font-size: 2em; margin-bottom: 20px; color: #1a73e8; font-weight: 600; }
+        .section { margin-bottom: 20px; }
+        .section h2 { font-size: 1.5em; color: #333; margin-bottom: 10px; font-weight: 600; }
+        input, button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 100%; max-width: 300px; margin-bottom: 10px; font-size: 1em; }
+        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: 500; transition: background 0.3s; }
+        button:hover { background: #1557b0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border: 1px solid #e0e0e0; text-align: left; }
+        th { background: #f8f9fa; cursor: pointer; }
+        th:hover { background: #e9ecef; }
+        a { color: #1a73e8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        #avatar { width: 100px; height: 100px; border-radius: 50%; margin-bottom: 10px; }
+        .toast { position: fixed; bottom: 20px; right: 20px; background: #34c759; color: white; padding: 10px 20px; border-radius: 4px; display: none; animation: slideIn 0.5s ease-in-out; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="profile-container">
+            <div class="section">
+                <h2>Установка пароля</h2>
+                <input type="password" id="newPassword" placeholder="Придумайте пароль">
+                <input type="password" id="repeatedPassword" placeholder="Повторите пароль">
+                <button onclick="changePassword()">Установить пароль</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        async function changePassword() {
+            const newPasswordData = {
+                new_password: document.getElementById('newPassword').value,
+                repeated_password: document.getElementById('repeatedPassword').value,
+            }
+            try {
+                const response = await fetch('/users/finish-reg?user_id=${user_id}&token=${token}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(newPasswordData)
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    const detail = errorData.detail || 'Unknown error';
+                    throw new Error(detail);
+                }
+                showToast("Успешно");
+                window.location.href = '/profile';
+            } catch (error) {
+                showToast(error);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+
+    </script>
+    <div class="toast" id="toast"></div>
+    <script src="/theme.js"></script>
+</body>
+</html>
