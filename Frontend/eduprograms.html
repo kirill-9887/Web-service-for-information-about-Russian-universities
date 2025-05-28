@@ -37,6 +37,15 @@
                     <option value="${progCode}">${progCode}</option>
                     % endfor
                 </select>
+                <select id="eduLevelFilter">
+                    <option value="">Все ступени обучения</option>
+                    <option value="Высшее образование - бакалавриат">Высшее образование - бакалавриат</option>
+                    <option value="Высшее образование - магистратура">Высшее образование - магистратура</option>
+                    <option value="Высшее образование - подготовка кадров высшей квалификации">Высшее образование - подготовка кадров высшей квалификации</option>
+                    <option value="ВО - подготовка кадров высшей квалификации">ВО - подготовка кадров высшей квалификации</option>
+                    <option value="Высшее образование – программы интернатуры">Высшее образование – программы интернатуры</option>
+                    <option value="ВО - бакалавриат">ВО - бакалавриат</option>
+                </select>
                 % if univ_id:
                 <label>Данные показаны для одного вуза</label>
                 <button onclick="resetUniv()">Сбросить вуз</button>
@@ -94,10 +103,12 @@
         let reverse = ${reverse};
         let ugsFilter = "${ugsFilter}";
         let progCodeFilter = "${progCodeFilter}";
+        let eduLevelFilter = "${eduLevelFilter}";
         const univ_id = "${univ_id}";
 
         document.getElementById('ugsFilter').value = ugsFilter;
         document.getElementById('progCodeFilter').value = progCodeFilter;
+        document.getElementById('eduLevelFilter').value = eduLevelFilter;
 
         function renderTable(data = eduprograms) {
             const tbody = document.getElementById('registryTable');
@@ -131,18 +142,19 @@
         function sortTable(column) {
             if (sortColumn === column) reverse = (reverse + 1) % 2;
             else { sortColumn = column; reverse = 0; }
-            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
+            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "edu_level_name": eduLevelFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
         }
 
         function changePage(delta) {
             const newPage = Math.max(1, Math.min(maxPage, currentPage + delta));
-            update_data({"page": newPage, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
+            update_data({"page": newPage, "ugs": ugsFilter, "prog_code": progCodeFilter, "edu_level_name": eduLevelFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
         }
 
         function applyFilters() {
             ugsFilter = document.getElementById('ugsFilter').value;
             progCodeFilter = document.getElementById('progCodeFilter').value;
-            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
+            eduLevelFilter = document.getElementById('eduLevelFilter').value;
+            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "edu_level_name": eduLevelFilter, "sort": sortColumn, "reverse": reverse, "univ_id": univ_id});
         }
 
         function toggleFavorite(id) {
@@ -156,7 +168,7 @@
         }
 
         function resetUniv() {
-            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "sort": sortColumn, "reverse": reverse, "univ_id": ""});
+            update_data({"page": 1, "ugs": ugsFilter, "prog_code": progCodeFilter, "edu_level_name": eduLevelFilter, "sort": sortColumn, "reverse": reverse, "univ_id": ""});
         }
 
         function update_data(paramsDict) {

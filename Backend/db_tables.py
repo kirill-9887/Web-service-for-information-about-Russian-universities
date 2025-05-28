@@ -421,97 +421,75 @@ class InMemoryCache:
             pass
 
 
-class Region(Base):
+class ItemTable(Base):
+    __abstract__ = True
+
+    @classmethod
+    async def _get_list(cls, column, self_column_name):
+        """Возвращает отсортированный список"""
+        print("get_list")
+        lst = InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        if lst:
+            return lst
+        async with asyncDBSession() as db_session:
+            result = await db_session.execute(select(cls).order_by(column))
+            InMemoryCache.set_to_cache(cls.__tablename__, 0,
+                                       [getattr(elem, self_column_name) for elem in result.scalars()])
+            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
+
+    @classmethod
+    async def _refresh(cls, select_column, column):
+        """Формирует список"""
+        print("Refresh")
+        async with asyncDBSession() as db_session:
+            async with db_session.begin():
+                cur_stmt = select(cls)
+                cur_result = await db_session.execute(cur_stmt)
+                for elem in cur_result.scalars():
+                    await db_session.delete(elem)
+                stmt = select(select_column).group_by(select_column)
+                result = await db_session.execute(stmt)
+                db_session.add_all([cls(**{column: value}) for value in result.scalars().all()])
+                InMemoryCache.invalidate(cls.__tablename__)
+
+
+class Region(ItemTable):
     """Таблица, которая содержит список регионов (для поля фильтрации)"""
     __tablename__ = "regions"
     name = Column(TEXT, primary_key=True)
 
     @classmethod
     async def get_list(cls):
-        """Возвращает отсортированный список регионов"""
-        regions_list = InMemoryCache.get_from_cache(cls.__tablename__, 0)
-        if regions_list:
-            return regions_list
-        async with asyncDBSession() as db_session:
-            result = await db_session.execute(select(cls).order_by(cls.name))
-            InMemoryCache.set_to_cache(cls.__tablename__, 0,
-                                       [region.name for region in result.scalars()])
-            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        return await super()._get_list(cls.name, self_column_name="name")
 
     @classmethod
     async def refresh(cls):
-        """Формирует список регионов, встречающихся в таблице вузов"""
-        async with asyncDBSession() as db_session:
-            async with db_session.begin():
-                cur_regions_stmt = select(Region)
-                cur_regions_result = await db_session.execute(cur_regions_stmt)
-                for item in cur_regions_result.scalars():
-                    await db_session.delete(item)
-                stmt = select(University.region_name).group_by(University.region_name)
-                result = await db_session.execute(stmt)
-                db_session.add_all([Region(name=region) for region in result.scalars().all()])
-                InMemoryCache.invalidate(cls.__tablename__)
+        await super()._refresh(select_column=University.region_name, column="name")
 
 
-class Ugs(Base):
+class Ugs(ItemTable):
     """Таблица, которая содержит список кодов укрупненных групп специальностей (для поля фильтрации)"""
     __tablename__ = "ugs"
     code = Column(TEXT, primary_key=True)
 
     @classmethod
     async def get_list(cls):
-        """Возвращает отсортированный список регионов"""
-        ugs_list = InMemoryCache.get_from_cache(cls.__tablename__, 0)
-        if ugs_list:
-            return ugs_list
-        async with asyncDBSession() as db_session:
-            result = await db_session.execute(select(cls).order_by(cls.code))
-            InMemoryCache.set_to_cache(cls.__tablename__, 0,
-                                       [ugs.code for ugs in result.scalars()])
-            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        return await super()._get_list(cls.code, self_column_name="code")
 
     @classmethod
     async def refresh(cls):
-        """Формирует список регионов, встречающихся в таблице вузов"""
-        async with asyncDBSession() as db_session:
-            async with db_session.begin():
-                cur_stmt = select(Ugs)
-                cur_result = await db_session.execute(cur_stmt)
-                for item in cur_result.scalars():
-                    await db_session.delete(item)
-                stmt = select(EduProg.ugs_code).group_by(EduProg.ugs_code)
-                result = await db_session.execute(stmt)
-                db_session.add_all([Ugs(code=ugs_code) for ugs_code in result.scalars().all()])
-                InMemoryCache.invalidate(cls.__tablename__)
+        await super()._refresh(select_column=EduProg.ugs_code, column="code")
 
 
-class ProgCode(Base):
+class ProgCode(ItemTable):
     """Таблица, которая содержит список кодов специальностей (для поля фильтрации)"""
     __tablename__ = "prog_codes"
     code = Column(TEXT, primary_key=True)
 
     @classmethod
     async def get_list(cls):
-        """Возвращает отсортированный список регионов"""
-        progcodes_list = InMemoryCache.get_from_cache(cls.__tablename__, 0)
-        if progcodes_list:
-            return progcodes_list
-        async with asyncDBSession() as db_session:
-            result = await db_session.execute(select(cls).order_by(cls.code))
-            InMemoryCache.set_to_cache(cls.__tablename__, 0,
-                                       [prog_code.code for prog_code in result.scalars()])
-            return InMemoryCache.get_from_cache(cls.__tablename__, 0)
+        return await super()._get_list(cls.code, self_column_name="code")
 
     @classmethod
     async def refresh(cls):
-        """Формирует список регионов, встречающихся в таблице вузов"""
-        async with asyncDBSession() as db_session:
-            async with db_session.begin():
-                cur_stmt = select(ProgCode)
-                cur_result = await db_session.execute(cur_stmt)
-                for item in cur_result.scalars():
-                    await db_session.delete(item)
-                stmt = select(EduProg.programm_code).group_by(EduProg.programm_code)
-                result = await db_session.execute(stmt)
-                db_session.add_all([ProgCode(code=prog_code) for prog_code in result.scalars().all()])
-                InMemoryCache.invalidate(cls.__tablename__)
+        await super()._refresh(select_column=EduProg.programm_code, column="code")

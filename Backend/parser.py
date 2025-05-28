@@ -157,3 +157,7 @@ async def xml_parse(filename: str):
             await dbt.EduProg.update(data=prog_model)
             actual_eduprogs_id.add(prog_model.id)
     return actual_univs_id, actual_eduprogs_id
+
+
+if __name__ == "__main__":
+    asyncio.run(update_DB())
