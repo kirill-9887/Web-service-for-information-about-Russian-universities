@@ -68,6 +68,7 @@ async def get_eduprograms(session_data: Optional[str] = Cookie(None),
                     page_size: int = Query(default=config.DEFAULT_PAGE_SIZE, ge=1),
                     ugs: str = Query(default=""),
                     prog_code: str = Query(default=""),
+                    edu_level_name: str = Query(default=""),
                     sort: str = Query(default="programm_code"),
                     reverse: int = Query(default=0, ge=0, le=1),
                     univ_id: str = Query(default="")):
@@ -85,6 +86,7 @@ async def get_eduprograms(session_data: Optional[str] = Cookie(None),
             or_(not ugs, dbt.EduProg.ugs_code == ugs),
             or_(not prog_code, dbt.EduProg.programm_code == prog_code),
             or_(not univ_id, dbt.EduProg.university_id == univ_id),
+            or_(not edu_level_name, dbt.EduProg.edu_level_name == edu_level_name),
         ))
         all_eduprogs_count = await db_session.scalar(stmt_count)
         stmt = select(dbt.EduProg).where(and_(
@@ -92,6 +94,7 @@ async def get_eduprograms(session_data: Optional[str] = Cookie(None),
             or_(not ugs, dbt.EduProg.ugs_code == ugs),
             or_(not prog_code, dbt.EduProg.programm_code == prog_code),
             or_(not univ_id, dbt.EduProg.university_id == univ_id),
+            or_(not edu_level_name, dbt.EduProg.edu_level_name == edu_level_name),
         )).options(selectinload(dbt.EduProg.university)) \
             .join(dbt.University)\
             .order_by(order, dbt.EduProg.programm_code) \
@@ -111,6 +114,7 @@ async def get_eduprograms(session_data: Optional[str] = Cookie(None),
                                        ugsFilter=ugs,
                                        progCodeList=prog_code_list,
                                        progCodeFilter=prog_code,
+                                       eduLevelFilter=edu_level_name,
                                        eduprogs_json=eduprogs_json,
                                        univ_id=univ_id,
                                        sortColumn=sort,
