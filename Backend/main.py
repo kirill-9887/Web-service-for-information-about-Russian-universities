@@ -676,7 +676,7 @@ async def stop_scheduled_download(scheduler = Depends(lambda: app.state.schedule
 
 async def main():
     await dbt.create_tables()
-    app.state.scheduler = schedule.Scheduler(interval_seconds=5)
+    app.state.scheduler = schedule.Scheduler()
     conf = uvicorn.Config(
         app=app,
         host=config.HOST,
