@@ -60,6 +60,7 @@ class Scheduler:
                 await asyncio.sleep(self.interval)
             except asyncio.CancelledError:
                 print("Задача обновления данных отменена")
+                return
             except Exception as e:
                 print(f"Ошибка при обновлении данных: {e}")
                 await asyncio.sleep(60)
